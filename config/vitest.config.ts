@@ -1,11 +1,13 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
 import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 
 const windowsTestWorkerOptions = process.platform === 'win32' ? { maxWorkers: 4 } : {}
 
 export default defineConfig({
+  plugins: [react()],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true'
   },

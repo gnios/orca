@@ -1,0 +1,178 @@
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { fireEvent } from '@testing-library/react'
+import {
+  ProjectSourceControlScope,
+  resetLineageCommitDrafts
+} from '../../../src/renderer/src/components/right-sidebar/source-control/lineage/ProjectSourceControlScope'
+import type { LineageProjectStatus } from '../../../src/shared/fleet-lineage-types'
+
+const mockStoreState = {
+  openDiff: vi.fn()
+}
+
+vi.mock('@/store', () => ({
+  useAppStore: (selector: any) => selector(mockStoreState)
+}))
+
+describe('ProjectSourceControlScope', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetLineageCommitDrafts()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    // Mock window.api and window.electron
+    ;(window as any).api = {
+      git: {
+        stageAll: vi.fn().mockResolvedValue(undefined),
+        unstageAll: vi.fn().mockResolvedValue(undefined),
+        discardAll: vi.fn().mockResolvedValue(undefined),
+        lineageCommitProject: vi.fn().mockResolvedValue({ status: 200, success: true, commitHash: 'abc1234' })
+      }
+    }
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+    delete (window as any).api
+  })
+
+  const sampleProject: LineageProjectStatus = {
+    repoName: 'billing-service',
+    worktrees: [
+      {
+        worktreeId: 'wt-billing-primary',
+        worktreePath: '/workspaces/billing-service/feat-checkout',
+        branch: 'feat-checkout',
+        dirtyFiles: [
+          { path: 'src/checkout.ts', status: 'M', area: 'staged' },
+          { path: 'src/receipt.ts', status: 'M', area: 'unstaged' }
+        ] as any
+      }
+    ]
+  }
+
+  it('renders dedicated stage buttons per project', async () => {
+    const onRefresh = vi.fn()
+    await act(async () => {
+      root.render(
+        <ProjectSourceControlScope
+          project={sampleProject}
+          onRefresh={onRefresh}
+        />
+      )
+    })
+
+    const stageAllBtn = container.querySelector('button[aria-label="Stage All"]')
+    const unstageAllBtn = container.querySelector('button[aria-label="Unstage All"]')
+    const discardAllBtn = container.querySelector('button[aria-label="Discard All"]')
+    const refreshBtn = container.querySelector('button[aria-label="Refresh"]')
+
+    expect(stageAllBtn).not.toBeNull()
+    expect(unstageAllBtn).not.toBeNull()
+    expect(discardAllBtn).not.toBeNull()
+    expect(refreshBtn).not.toBeNull()
+
+    // Clicking stage all calls git.stageAll for this project's worktreePath
+    await act(async () => {
+      ;(stageAllBtn as HTMLElement).click()
+    })
+    expect((window as any).api.git.stageAll).toHaveBeenCalledWith({
+      worktreePath: '/workspaces/billing-service/feat-checkout'
+    })
+
+    // Clicking refresh triggers onRefresh callback
+    await act(async () => {
+      ;(refreshBtn as HTMLElement).click()
+    })
+    expect(onRefresh).toHaveBeenCalled()
+  })
+
+  it('persists commit draft per project', async () => {
+    await act(async () => {
+      root.render(
+        <ProjectSourceControlScope
+          project={sampleProject}
+        />
+      )
+    })
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement
+    expect(textarea).not.toBeNull()
+
+    // Type a commit message draft using fireEvent
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'feat: add apple pay checkout support' } })
+    })
+
+    expect(textarea.value).toBe('feat: add apple pay checkout support')
+
+    // Unmount component
+    act(() => {
+      root.unmount()
+    })
+
+    // Re-mount component and verify draft is preserved
+    root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <ProjectSourceControlScope
+          project={sampleProject}
+        />
+      )
+    })
+
+    const restoredTextarea = container.querySelector('textarea') as HTMLTextAreaElement
+    expect(restoredTextarea.value).toBe('feat: add apple pay checkout support')
+  })
+
+  it('dispatches commit only for target project', async () => {
+    const onRefresh = vi.fn()
+    await act(async () => {
+      root.render(
+        <ProjectSourceControlScope
+          project={sampleProject}
+          onRefresh={onRefresh}
+        />
+      )
+    })
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement
+    const commitBtn = container.querySelector('[data-testid="commit-button-billing-service"]') as HTMLButtonElement
+
+    // Button disabled when empty
+    expect(commitBtn.disabled).toBe(true)
+
+    // Type commit message
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'fix: correct currency formatting' } })
+    })
+
+    expect(commitBtn.disabled).toBe(false)
+
+    // Click commit
+    await act(async () => {
+      commitBtn.click()
+    })
+
+    // Dispatches commit strictly to target project's worktreePath
+    expect((window as any).api.git.lineageCommitProject).toHaveBeenCalledWith({
+      worktreePath: '/workspaces/billing-service/feat-checkout',
+      message: 'fix: correct currency formatting'
+    })
+
+    // Commit draft is cleared on success
+    expect(textarea.value).toBe('')
+    expect(onRefresh).toHaveBeenCalled()
+  })
+})

@@ -34,6 +34,7 @@ import {
   restoreOrStripOverlayEnv
 } from './pi-agent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { injectLineageEnv } from '../../../lineage/pty-env-injector'
 
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
@@ -340,6 +341,8 @@ export function buildPtyHostEnv(
   // Why: must run after the prepends above — they re-read PATH from the unscrubbed
   // process.env when baseEnv carries none, which is the daemon path's normal shape.
   stripLegacyTerminalShimEnv(baseEnv, process.platform)
+
+  injectLineageEnv(baseEnv)
 
   return baseEnv
 }

@@ -1,11 +1,23 @@
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
+import { LineageSourceControl } from '../lineage/LineageSourceControl'
 
 /** Resolves the panel model and guards the two states that have no source control to show. */
 export function SourceControlPanel() {
   const model = useSourceControlPanelModel()
   const { activeRepo, activeWorktree, isFolder, worktreePath } = model
+  const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+
+  const hasLineageChildren = Object.values(workspaceLineageByChildKey ?? {}).some(
+    (lineage) => lineage.parentWorkspaceKey === activeWorkspaceKey
+  )
+
+  if (isFolder && hasLineageChildren) {
+    return <LineageSourceControl parentWorkspaceKey={activeWorkspaceKey ?? undefined} />
+  }
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (

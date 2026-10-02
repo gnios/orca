@@ -14,7 +14,8 @@
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",
-    "../src/types/**/*"
+    "../src/types/**/*",
+    "../packages/**/*"
   ],
   "compilerOptions": {
     "composite": true,
