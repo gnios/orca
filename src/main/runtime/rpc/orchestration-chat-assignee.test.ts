@@ -340,7 +340,7 @@ describe('the chat runs the worker lifecycle as its own session', () => {
     expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('completed')
   })
 
-  it("rejects another chat's worker_done for the chat's Dispatch", async () => {
+  it("rejects another chat's worker_done for the chat's Dispatch, as sent by that chat", async () => {
     const { taskId, dispatchId } = await injectToChat()
 
     const sent = await as(SESSION_Y, 'orchestration.send', {
@@ -348,7 +348,25 @@ describe('the chat runs the worker lifecycle as its own session', () => {
       from: undefined
     })
 
-    expect(sent).toMatchObject({ lifecycle: { action: 'rejected' } })
+    expect(sent).toMatchObject({
+      lifecycle: {
+        action: 'rejected',
+        code: 'sender_not_assignee',
+        reason: expect.stringContaining(`received handle orca_session_id:${SESSION_Y}`)
+      }
+    })
+    expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+  })
+
+  it("refuses another chat that names the assignee's Orca session ID as its sender", async () => {
+    const { taskId, dispatchId } = await injectToChat()
+
+    const response = await call(SESSION_Y, 'orchestration.send', workerDone(taskId, dispatchId))
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
     expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
   })
 
