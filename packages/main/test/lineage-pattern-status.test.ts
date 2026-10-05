@@ -83,6 +83,65 @@ describe('getLineageStatus with name-pattern discovery', () => {
     expect(all[0].matchedBy).toBe('lineage')
   })
 
+  it('merges a lineage child and a pattern worktree of one repo into a single display-named project', async () => {
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pattern-'))
+    const childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-child-'))
+    const childKey = `worktree:r-internal-id::${childDir}`
+    const store = makeStore({
+      repos: [{ id: 'r-internal-id', path: repoDir, displayName: 'Loan Core' }],
+      getAllWorkspaceLineage: () => ({
+        [childKey]: {
+          childWorkspaceKey: `worktree:r-internal-id::${childDir}`,
+          parentWorkspaceKey,
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 0
+        }
+      })
+    })
+
+    const payload = await getLineageStatus(store, parentWorkspaceKey, {
+      gitStatusFn,
+      listWorktreesFn
+    })
+
+    expect(Object.keys(payload.projects)).toEqual(['Loan Core'])
+    const project = payload.projects['Loan Core']
+    expect(project.repoName).toBe('Loan Core')
+    expect(project.worktrees.map((w) => w.matchedBy).sort()).toEqual(['lineage', 'pattern'])
+  })
+
+  it('falls back to the raw repo id when the repo is not registered', async () => {
+    const childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-child-'))
+    const childKey = `worktree:unregistered::${childDir}`
+    const store = makeStore({
+      getAllWorkspaceLineage: () => ({
+        [childKey]: {
+          childWorkspaceKey: `worktree:unregistered::${childDir}`,
+          parentWorkspaceKey,
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 0
+        }
+      })
+    })
+    const payload = await getLineageStatus(store, parentWorkspaceKey, {
+      gitStatusFn,
+      listWorktreesFn
+    })
+    expect(Object.keys(payload.projects)).toEqual(['unregistered'])
+  })
+
+  it('gives pattern worktrees a store worktree id so diffs can open', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-pattern-'))
+    const store = makeStore({ repos: [{ id: 'r1', path: tmp, displayName: 'loan-core' }] })
+    const payload = await getLineageStatus(store, parentWorkspaceKey, {
+      gitStatusFn,
+      listWorktreesFn
+    })
+    expect(payload.projects['loan-core'].worktrees[0].worktreeId).toBe(`r1::${tmp}`)
+  })
+
   it('keeps explicit-only behaviour when the parent name carries no ticket key', async () => {
     const store = makeStore({ repos: [{ id: 'r1', path: '/x', displayName: 'x' }] })
     const payload = await getLineageStatus(store, 'folder:control-tower', {

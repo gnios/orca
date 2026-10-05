@@ -10,8 +10,9 @@ import {
 } from '../../../src/renderer/src/components/right-sidebar/source-control/lineage/ProjectSourceControlScope'
 import type { LineageProjectStatus } from '../../../src/shared/fleet-lineage-types'
 
-const mockStoreState = {
-  openDiff: vi.fn()
+const mockStoreState: { openDiff: ReturnType<typeof vi.fn>; worktreesByRepo: object } = {
+  openDiff: vi.fn(),
+  worktreesByRepo: {}
 }
 
 vi.mock('@/store', () => ({
@@ -126,6 +127,72 @@ describe('ProjectSourceControlScope', () => {
 
     const restoredTextarea = container.querySelector('textarea') as HTMLTextAreaElement
     expect(restoredTextarea.value).toBe('feat: add apple pay checkout support')
+  })
+
+  describe('opening a file diff without onOpenFileDiff', () => {
+    const childId = 'r1::/workspaces/loan-core/child'
+    const patternId = 'r1::/repos/loan-core'
+    const mixedProject: LineageProjectStatus = {
+      repoName: 'Loan Core',
+      worktrees: [
+        {
+          worktreeId: childId,
+          worktreePath: '/workspaces/loan-core/child',
+          branch: 'feat-a',
+          matchedBy: 'lineage',
+          dirtyFiles: [{ path: 'src/child.ts', status: 'modified', area: 'staged' }]
+        },
+        {
+          worktreeId: patternId,
+          worktreePath: '/repos/loan-core',
+          branch: 'feat-b',
+          matchedBy: 'pattern',
+          dirtyFiles: [{ path: 'src/pattern.ts', status: 'modified', area: 'unstaged' }]
+        }
+      ]
+    }
+
+    it('opens the clicked row worktree with absolute and relative paths', async () => {
+      mockStoreState.worktreesByRepo = {
+        r1: [{ id: childId }, { id: patternId }]
+      }
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={mixedProject} />)
+      })
+
+      await act(async () => {
+        ;(container.querySelector('[data-testid="file-row-src/pattern.ts"]') as HTMLElement).click()
+      })
+      expect(mockStoreState.openDiff).toHaveBeenLastCalledWith(
+        patternId,
+        '/repos/loan-core/src/pattern.ts',
+        'src/pattern.ts',
+        'typescript',
+        false
+      )
+
+      await act(async () => {
+        ;(container.querySelector('[data-testid="file-row-src/child.ts"]') as HTMLElement).click()
+      })
+      expect(mockStoreState.openDiff).toHaveBeenLastCalledWith(
+        childId,
+        '/workspaces/loan-core/child/src/child.ts',
+        'src/child.ts',
+        'typescript',
+        true
+      )
+    })
+
+    it('does nothing when the worktree is not in the store', async () => {
+      mockStoreState.worktreesByRepo = {}
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={mixedProject} />)
+      })
+      await act(async () => {
+        ;(container.querySelector('[data-testid="file-row-src/pattern.ts"]') as HTMLElement).click()
+      })
+      expect(mockStoreState.openDiff).not.toHaveBeenCalled()
+    })
   })
 
   it('dispatches commit only for target project', async () => {

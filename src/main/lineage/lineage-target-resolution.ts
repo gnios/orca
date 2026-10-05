@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { splitWorktreeId } from '../../shared/worktree/id'
+import { splitWorktreeId, WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { LineageMatchSource } from '../../shared/lineage-discovery-types'
 import { extractKeysWithPattern } from '../../shared/lineage-ticket-keys'
@@ -74,9 +74,12 @@ export function resolveWorktreeTarget(
     return null
   }
 
+  // invariant: one repository, one name, so Source Control groups lineage and pattern worktrees together
+  const registered = store.getRepos?.().find((repo) => repo.id === repoName)
+
   return {
     worktreeId,
-    repoName,
+    repoName: registered?.displayName ?? repoName,
     branchHint,
     worktreePath: path.resolve(candidatePath)
   }
@@ -153,7 +156,8 @@ export async function resolveLineageTargets(
     })
     for (const found of patternTargets) {
       targets.push({
-        worktreeId: found.worktreePath,
+        // invariant: the store's worktree id, so renderer diff-open resolves the right worktree
+        worktreeId: `${found.repoId}${WORKTREE_ID_SEPARATOR}${found.worktreePath}`,
         repoName: found.repoName,
         branchHint: found.branch,
         worktreePath: found.worktreePath,

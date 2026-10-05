@@ -3,6 +3,9 @@ import { FolderGit2, RefreshCw, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
+import { joinPath } from '@/lib/path'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { GitFileStatus, GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { LineageProjectStatus } from '../../../../../../shared/fleet-lineage-types'
 import {
@@ -99,6 +102,7 @@ export function ProjectSourceControlScope({
   onOpenFileDiff
 }: ProjectSourceControlScopeProps): React.JSX.Element {
   const storeOpenDiff = useAppStore((s) => s.openDiff)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
 
   const primaryWorktree = project.worktrees[0]
   const worktreeId = primaryWorktree?.worktreeId ?? project.repoName
@@ -293,9 +297,18 @@ export function ProjectSourceControlScope({
       onOpenFileDiff(targetWorktreeId, filePath, staged)
       return
     }
-    if (storeOpenDiff) {
-      storeOpenDiff(targetWorktreeId, filePath, filePath, 'text', staged)
+    const rowWorktree = project.worktrees.find((wt) => wt.worktreeId === targetWorktreeId)
+    // invariant: a diff tab only opens for a worktree the store owns, never an orphan id
+    if (!rowWorktree?.worktreePath || !findWorktreeById(worktreesByRepo ?? {}, targetWorktreeId)) {
+      return
     }
+    storeOpenDiff?.(
+      targetWorktreeId,
+      joinPath(rowWorktree.worktreePath, filePath),
+      filePath,
+      detectLanguage(filePath),
+      staged
+    )
   }
 
   return (

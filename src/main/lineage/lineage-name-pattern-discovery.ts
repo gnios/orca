@@ -14,6 +14,7 @@ export type PatternRepo = {
 }
 
 export type PatternTarget = {
+  repoId: string
   repoName: string
   worktreePath: string
   branch: string
@@ -81,6 +82,7 @@ export async function discoverPatternTargets(
         const matchedKey = keys.find((key) => matchesTicketKeys(text, [key]))
         if (matchedKey) {
           targets.push({
+            repoId: repo.id,
             repoName: repo.displayName,
             worktreePath: worktree.path,
             branch,

@@ -61,6 +61,7 @@ describe('discoverPatternTargets', () => {
     })
     expect(targets).toEqual([
       {
+        repoId: 'r1',
         repoName: 'loan-core',
         worktreePath: '/p/loans.loan-core',
         branch: 'feature/levgp-483-new-loan',
