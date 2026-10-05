@@ -11,11 +11,12 @@ import { ConfirmationDialogContext } from '@/components/confirmation-dialog-cont
 type RefreshCall = { worktreeId: string; worktreePath: string }
 type GitCall = { worktreeId: string | null; worktreePath: string }
 
-const recorded = vi.hoisted(() => ({
-  refreshes: [] as RefreshCall[],
-  stages: [] as GitCall[],
-  commits: [] as GitCall[]
-}))
+const recorded = vi.hoisted(() => {
+  const refreshes: RefreshCall[] = []
+  const stages: GitCall[] = []
+  const commits: GitCall[] = []
+  return { refreshes, stages, commits }
+})
 
 vi.mock('../../git-status-refresh', () => ({
   refreshGitStatusForWorktree: vi.fn(async (args: RefreshCall) => {
