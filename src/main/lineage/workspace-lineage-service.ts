@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import { isWorkspaceKey } from '../../shared/workspace-scope'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type {
   AttachToParentArgs,
@@ -47,6 +48,14 @@ export function attachWorkspaceToParent(
       }
     }
 
+    if (!isWorkspaceKey(parentWorkspaceKey) || !isWorkspaceKey(childWorkspaceKey)) {
+      return {
+        status: 400,
+        success: false,
+        error: 'Parent and child must be valid workspace keys'
+      }
+    }
+
     const lineages = getStoredLineages(store)
     const existing = lineages[childWorkspaceKey] ?? store.getWorkspaceLineage?.(childWorkspaceKey)
 
@@ -60,9 +69,9 @@ export function attachWorkspaceToParent(
     }
 
     const lineageEntry: WorkspaceLineage = {
-      childWorkspaceKey: childWorkspaceKey as WorkspaceKey,
+      childWorkspaceKey,
       childInstanceId: existing?.childInstanceId ?? `inst-${Date.now()}`,
-      parentWorkspaceKey: parentWorkspaceKey as WorkspaceKey,
+      parentWorkspaceKey,
       parentInstanceId: null,
       origin: 'manual',
       capture: {
@@ -137,9 +146,17 @@ export function notifyWorktreeCreated(
       }
     }
 
+    if (!isWorkspaceKey(parentWorkspaceKey)) {
+      return {
+        status: 400,
+        registered: false,
+        error: 'Parent must be a valid workspace key'
+      }
+    }
+
     // Build child workspace key: worktree:<repoName>:<branch> or worktree:<worktreePath>
     const normalizedPath = path.resolve(worktreePath)
-    let childKey: string
+    let childKey: WorkspaceKey
     if (repoName && branch) {
       childKey = `worktree:${repoName}:${branch}`
     } else if (repoName) {
@@ -161,9 +178,9 @@ export function notifyWorktreeCreated(
     }
 
     const lineageEntry: WorkspaceLineage = {
-      childWorkspaceKey: childKey as WorkspaceKey,
+      childWorkspaceKey: childKey,
       childInstanceId: existing?.childInstanceId ?? `inst-${Date.now()}`,
-      parentWorkspaceKey: parentWorkspaceKey as WorkspaceKey,
+      parentWorkspaceKey,
       parentInstanceId: null,
       origin: 'cli',
       capture: {

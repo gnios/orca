@@ -86,7 +86,7 @@ describe('ProjectSourceControlScope', () => {
 
     // Clicking stage all calls git.stageAll for this project's worktreePath
     await act(async () => {
-      ;(stageAllBtn as HTMLElement).click()
+      stageAllBtn?.click()
     })
     expect(gitApi.stageAll).toHaveBeenCalledWith({
       worktreePath: '/workspaces/billing-service/feat-checkout'
@@ -94,7 +94,7 @@ describe('ProjectSourceControlScope', () => {
 
     // Clicking refresh triggers onRefresh callback
     await act(async () => {
-      ;(refreshBtn as HTMLElement).click()
+      refreshBtn?.click()
     })
     expect(onRefresh).toHaveBeenCalled()
   })
@@ -104,7 +104,7 @@ describe('ProjectSourceControlScope', () => {
       root.render(<ProjectSourceControlScope project={sampleProject} />)
     })
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
     expect(textarea).not.toBeNull()
 
     // Type a commit message draft using fireEvent
@@ -125,7 +125,7 @@ describe('ProjectSourceControlScope', () => {
       root.render(<ProjectSourceControlScope project={sampleProject} />)
     })
 
-    const restoredTextarea = container.querySelector('textarea') as HTMLTextAreaElement
+    const restoredTextarea = container.querySelector<HTMLTextAreaElement>('textarea')
     expect(restoredTextarea.value).toBe('feat: add apple pay checkout support')
   })
 
@@ -161,7 +161,7 @@ describe('ProjectSourceControlScope', () => {
       })
 
       await act(async () => {
-        ;(container.querySelector('[data-testid="file-row-src/pattern.ts"]') as HTMLElement).click()
+        container.querySelector<HTMLElement>('[data-testid="file-row-src/pattern.ts"]').click()
       })
       expect(mockStoreState.openDiff).toHaveBeenLastCalledWith(
         patternId,
@@ -172,7 +172,7 @@ describe('ProjectSourceControlScope', () => {
       )
 
       await act(async () => {
-        ;(container.querySelector('[data-testid="file-row-src/child.ts"]') as HTMLElement).click()
+        container.querySelector<HTMLElement>('[data-testid="file-row-src/child.ts"]').click()
       })
       expect(mockStoreState.openDiff).toHaveBeenLastCalledWith(
         childId,
@@ -189,7 +189,7 @@ describe('ProjectSourceControlScope', () => {
         root.render(<ProjectSourceControlScope project={mixedProject} />)
       })
       await act(async () => {
-        ;(container.querySelector('[data-testid="file-row-src/pattern.ts"]') as HTMLElement).click()
+        container.querySelector<HTMLElement>('[data-testid="file-row-src/pattern.ts"]').click()
       })
       expect(mockStoreState.openDiff).not.toHaveBeenCalled()
     })
@@ -201,10 +201,10 @@ describe('ProjectSourceControlScope', () => {
       root.render(<ProjectSourceControlScope project={sampleProject} onRefresh={onRefresh} />)
     })
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement
-    const commitBtn = container.querySelector(
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
+    const commitBtn = container.querySelector<HTMLButtonElement>(
       '[data-testid="commit-button-billing-service"]'
-    ) as HTMLButtonElement
+    )
 
     // Button disabled when empty
     expect(commitBtn.disabled).toBe(true)

@@ -164,6 +164,17 @@ describe('workspace-ipc', () => {
     expect(response.error).toBe('Disk write error')
   })
 
+  it('rejects attach-to-parent keys that are not workspace keys', async () => {
+    const handler = handlers.get('workspace:attach-to-parent')
+    const response = await handler!(
+      {},
+      { parentWorkspaceKey: 'parent', childWorkspaceKey: 'child' }
+    )
+
+    expect(response.status).toBe(400)
+    expect(response.success).toBe(false)
+  })
+
   it('handles workspace:attach-to-parent correctly', async () => {
     const handler = handlers.get('workspace:attach-to-parent')
     expect(handler).toBeDefined()

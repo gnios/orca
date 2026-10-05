@@ -40,23 +40,24 @@ export function injectLineageEnv<T extends Record<string, string | undefined>>(
   sourceContext?: Partial<ActiveLineageContext> | Record<string, string | undefined> | null
 ): T {
   const context = getActiveLineageContext()
+  const source: Record<string, string | undefined> = sourceContext ?? {}
   const parentWorkspaceKey =
-    (sourceContext as Partial<ActiveLineageContext>)?.parentWorkspaceKey ??
-    (sourceContext as Record<string, string | undefined>)?.['ORCA_PARENT_WORKSPACE_KEY'] ??
+    source.parentWorkspaceKey ??
+    source.ORCA_PARENT_WORKSPACE_KEY ??
     context?.parentWorkspaceKey ??
     process.env.ORCA_PARENT_WORKSPACE_KEY
 
   const parentSessionId =
-    (sourceContext as Partial<ActiveLineageContext>)?.parentSessionId ??
-    (sourceContext as Record<string, string | undefined>)?.['ORCA_PARENT_SESSION_ID'] ??
+    source.parentSessionId ??
+    source.ORCA_PARENT_SESSION_ID ??
     context?.parentSessionId ??
     process.env.ORCA_PARENT_SESSION_ID
 
   if (parentWorkspaceKey) {
-    ;(targetEnv as Record<string, string>)['ORCA_PARENT_WORKSPACE_KEY'] = parentWorkspaceKey
+    Object.assign(targetEnv, { ORCA_PARENT_WORKSPACE_KEY: parentWorkspaceKey })
   }
   if (parentSessionId) {
-    ;(targetEnv as Record<string, string>)['ORCA_PARENT_SESSION_ID'] = parentSessionId
+    Object.assign(targetEnv, { ORCA_PARENT_SESSION_ID: parentSessionId })
   }
   return targetEnv
 }

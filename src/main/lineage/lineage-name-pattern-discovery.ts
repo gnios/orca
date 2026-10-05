@@ -53,13 +53,17 @@ export async function discoverPatternTargets(
     (repo) => !repo.connectionId && (repoScope === 'all' || repoScope.includes(repo.id))
   )
   const perRepo = await Promise.all(
-    localRepos.map(async (repo) => {
-      try {
-        return { repo, worktrees: await listWorktreesFn(repo.path) }
-      } catch {
-        return { repo, worktrees: [] as GitWorktreeInfo[] }
+    localRepos.map(
+      async (
+        repo
+      ): Promise<{ repo: (typeof localRepos)[number]; worktrees: GitWorktreeInfo[] }> => {
+        try {
+          return { repo, worktrees: await listWorktreesFn(repo.path) }
+        } catch {
+          return { repo, worktrees: [] }
+        }
       }
-    })
+    )
   )
 
   const targets: PatternTarget[] = []

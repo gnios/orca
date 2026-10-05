@@ -120,9 +120,9 @@ describe('LineageSourceControl', () => {
       )
     })
 
-    const fileRow = container.querySelector(
+    const fileRow = container.querySelector<HTMLElement>(
       '[data-testid="file-row-src/calculator.ts"]'
-    ) as HTMLElement
+    )
     expect(fileRow).not.toBeNull()
 
     await act(async () => {
