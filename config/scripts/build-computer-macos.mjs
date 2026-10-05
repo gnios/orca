@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 const repoRoot = path.resolve(import.meta.dirname, '../..')
@@ -29,8 +29,47 @@ createHelperApp()
 
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    const scratchPath = path.join(packagePath, '.build', triple)
+    run('swift', [
+      'build',
+      '-c',
+      'release',
+      '--package-path',
+      packagePath,
+      '--scratch-path',
+      scratchPath,
+      '--triple',
+      triple
+    ])
+    const binDirResult = spawnSync(
+      'swift',
+      [
+        'build',
+        '-c',
+        'release',
+        '--package-path',
+        packagePath,
+        '--scratch-path',
+        scratchPath,
+        '--triple',
+        triple,
+        '--show-bin-path'
+      ],
+      { encoding: 'utf8' }
+    )
+    const binDir = binDirResult.stdout ? binDirResult.stdout.trim().split('\n').pop() : ''
+    const candidatePaths = [
+      path.join(binDir, 'orca-computer-use-macos'),
+      path.join(scratchPath, 'out', 'Products', 'Release', 'orca-computer-use-macos'),
+      path.join(scratchPath, 'release', 'orca-computer-use-macos'),
+      path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    ]
+    for (const candidate of candidatePaths) {
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+    return candidatePaths[0]
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
