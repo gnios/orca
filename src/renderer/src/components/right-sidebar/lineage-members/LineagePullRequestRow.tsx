@@ -17,7 +17,15 @@ export function lineagePullRequestLabel(member: LineageMember): string {
   if (member.pr) {
     return `${member.repoName}${lineagePullRequestNumberLabel(member.pr)}`
   }
-  return member.branch ? `${member.repoName} (${member.branch})` : member.repoName
+  if (member.branch) {
+    return `${member.repoName} (${member.branch})`
+  }
+  // why: a manual worktree link whose worktree is gone has only its path left to name it
+  const folder = member.worktreePath
+    ?.replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop()
+  return folder ? `${member.repoName} (${folder})` : member.repoName
 }
 
 /** Compact row for a member with no local worktree (a manual PR or branch not checked out): only a link. */
