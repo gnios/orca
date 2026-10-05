@@ -4,6 +4,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { SectionHeader } from '../listing/section-header'
 import { ActionButton } from '../listing/action-button'
 import { UncommittedEntryRow } from '../listing/uncommitted-entry-row'
+import { translate } from '@/i18n/i18n'
 
 export type ProjectSourceControlSectionGroupProps = {
   worktreePath: string
@@ -46,14 +47,20 @@ export function ProjectSourceControlSectionGroup({
       {stagedFiles.length > 0 && (
         <div className="flex flex-col">
           <SectionHeader
-            label="Staged Changes"
+            label={translate(
+              'auto.components.rightSidebar.lineageSourceControl.stagedChanges',
+              'Staged Changes'
+            )}
             count={stagedFiles.length}
             isCollapsed={!isStagedOpen}
             onToggle={() => setIsStagedOpen(!isStagedOpen)}
             actions={
               <ActionButton
                 icon={Minus}
-                title="Unstage All"
+                title={translate(
+                  'auto.components.rightSidebar.lineageSourceControl.unstageAll',
+                  'Unstage All'
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   void onUnstageAll()
@@ -96,7 +103,10 @@ export function ProjectSourceControlSectionGroup({
       {unstagedFiles.length > 0 && (
         <div className="flex flex-col">
           <SectionHeader
-            label="Changes"
+            label={translate(
+              'auto.components.rightSidebar.lineageSourceControl.changes',
+              'Changes'
+            )}
             count={unstagedFiles.length}
             isCollapsed={!isChangesOpen}
             onToggle={() => setIsChangesOpen(!isChangesOpen)}
@@ -104,7 +114,10 @@ export function ProjectSourceControlSectionGroup({
               <>
                 <ActionButton
                   icon={Undo2}
-                  title="Discard All"
+                  title={translate(
+                    'auto.components.rightSidebar.lineageSourceControl.discardAll',
+                    'Discard All'
+                  )}
                   onClick={(e) => {
                     e.stopPropagation()
                     void onDiscardAll()
@@ -112,7 +125,10 @@ export function ProjectSourceControlSectionGroup({
                 />
                 <ActionButton
                   icon={Plus}
-                  title="Stage All"
+                  title={translate(
+                    'auto.components.rightSidebar.lineageSourceControl.stageAll',
+                    'Stage All'
+                  )}
                   onClick={(e) => {
                     e.stopPropagation()
                     void onStageAll()
@@ -156,14 +172,20 @@ export function ProjectSourceControlSectionGroup({
       {untrackedFiles.length > 0 && (
         <div className="flex flex-col">
           <SectionHeader
-            label="Untracked Files"
+            label={translate(
+              'auto.components.rightSidebar.lineageSourceControl.untrackedFiles',
+              'Untracked Files'
+            )}
             count={untrackedFiles.length}
             isCollapsed={!isUntrackedOpen}
             onToggle={() => setIsUntrackedOpen(!isUntrackedOpen)}
             actions={
               <ActionButton
                 icon={Plus}
-                title="Stage All"
+                title={translate(
+                  'auto.components.rightSidebar.lineageSourceControl.stageAll',
+                  'Stage All'
+                )}
                 onClick={(e) => {
                   e.stopPropagation()
                   void onStageAll()
@@ -205,7 +227,10 @@ export function ProjectSourceControlSectionGroup({
 
       {!hasAnyFiles && (
         <div className="py-2.5 px-3 text-[11px] text-muted-foreground/70 italic">
-          No changes in this repository
+          {translate(
+            'auto.components.rightSidebar.lineageSourceControl.repoClean',
+            'No changes in this repository'
+          )}
         </div>
       )}
     </div>

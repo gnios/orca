@@ -12,6 +12,7 @@ import { ActionButton } from '../listing/action-button'
 import { ProjectSourceControlScope } from './ProjectSourceControlScope'
 import { LineageOriginBadge } from '../../lineage-origin-badge'
 import { useLineageTicketKeys } from './use-lineage-ticket-keys'
+import { translate } from '@/i18n/i18n'
 
 export type LineageSourceControlProps = {
   parentWorkspaceKey?: string
@@ -161,7 +162,12 @@ export function LineageSourceControl({
     return (
       <div className="flex items-center justify-center h-full p-4 text-xs text-muted-foreground gap-2">
         <RefreshCw className="size-3.5 animate-spin text-primary" />
-        <span>Loading lineage status...</span>
+        <span>
+          {translate(
+            'auto.components.rightSidebar.lineageSourceControl.loading',
+            'Loading lineage status...'
+          )}
+        </span>
       </div>
     )
   }
@@ -171,7 +177,7 @@ export function LineageSourceControl({
       <div className="flex flex-col items-center justify-center h-full p-4 text-xs text-destructive gap-2">
         <span>{error}</span>
         <Button variant="outline" size="sm" onClick={fetchStatus}>
-          Retry
+          {translate('auto.components.rightSidebar.lineageSourceControl.retry', 'Retry')}
         </Button>
       </div>
     )
@@ -185,10 +191,16 @@ export function LineageSourceControl({
       >
         <CheckCircle2 className="size-8 text-workspace-status-review/70 mb-2" />
         <div className="text-xs font-medium text-foreground mb-1">
-          No changes across lineage worktrees
+          {translate(
+            'auto.components.rightSidebar.lineageSourceControl.clean',
+            'No changes across lineage worktrees'
+          )}
         </div>
         <div className="text-[11px] text-muted-foreground max-w-[200px]">
-          All child repositories in this lineage are up to date.
+          {translate(
+            'auto.components.rightSidebar.lineageSourceControl.cleanDescription',
+            'All child repositories in this lineage are up to date.'
+          )}
         </div>
       </div>
     )
@@ -203,14 +215,24 @@ export function LineageSourceControl({
         <div className="border-b border-border px-3 pt-2 pb-1.5 flex items-center justify-between sticky top-0 bg-background z-10">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-xs tracking-wider uppercase text-foreground/80">
-              Source Control
+              {translate(
+                'auto.components.rightSidebar.lineageSourceControl.title',
+                'Source Control'
+              )}
             </span>
             <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
               {overallDirtyFiles}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <ActionButton icon={RefreshCw} title="Refresh All" onClick={fetchStatus} />
+            <ActionButton
+              icon={RefreshCw}
+              title={translate(
+                'auto.components.rightSidebar.lineageSourceControl.refreshAll',
+                'Refresh All'
+              )}
+              onClick={fetchStatus}
+            />
           </div>
         </div>
 
@@ -265,7 +287,10 @@ export function LineageSourceControl({
                     <div className="flex shrink-0 items-center justify-end">
                       <ActionButton
                         icon={RefreshCw}
-                        title="Refresh"
+                        title={translate(
+                          'auto.components.rightSidebar.lineageSourceControl.refresh',
+                          'Refresh'
+                        )}
                         onClick={(e) => {
                           e.stopPropagation()
                           fetchStatus()

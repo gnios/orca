@@ -14,9 +14,6 @@ export type ManualPullRequestEntryValue = {
 /** Provided by ChecksPanel only on the single-panel path while lineage IPC is supported. */
 export const ManualPullRequestEntryContext = createContext<ManualPullRequestEntryValue | null>(null)
 
-const LABEL_KEY = 'auto.components.rightSidebar.lineageMembers.linkPullRequestElsewhere'
-const LABEL = 'Link pull request from another repository…'
-
 export function ManualPullRequestDialog({
   open,
   onOpenChange
@@ -32,7 +29,12 @@ export function ManualPullRequestDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{translate(LABEL_KEY, LABEL)}</DialogTitle>
+          <DialogTitle>
+            {translate(
+              'auto.components.rightSidebar.lineageMembers.linkPullRequestElsewhere',
+              'Link pull request from another repository…'
+            )}
+          </DialogTitle>
         </DialogHeader>
         <AddManualPullRequestForm
           parentWorkspaceKey={entry.parentWorkspaceKey}
@@ -55,7 +57,10 @@ export function ManualPullRequestMenuItem({
   return (
     <DropdownMenuItem onSelect={onOpen}>
       <Link className="size-3.5" />
-      {translate(LABEL_KEY, LABEL)}
+      {translate(
+        'auto.components.rightSidebar.lineageMembers.linkPullRequestElsewhere',
+        'Link pull request from another repository…'
+      )}
     </DropdownMenuItem>
   )
 }
@@ -70,7 +75,10 @@ export function ManualPullRequestEmptyAction(): React.JSX.Element | null {
     <>
       <Button size="xs" variant="ghost" className="mt-3" onClick={() => setOpen(true)}>
         <Link className="size-3.5" />
-        {translate(LABEL_KEY, LABEL)}
+        {translate(
+          'auto.components.rightSidebar.lineageMembers.linkPullRequestElsewhere',
+          'Link pull request from another repository…'
+        )}
       </Button>
       <ManualPullRequestDialog open={open} onOpenChange={setOpen} />
     </>

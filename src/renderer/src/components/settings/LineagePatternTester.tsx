@@ -128,7 +128,10 @@ export function LineagePatternTester({
                 id="lineage-test-tower-name"
                 value={towerName}
                 disabled={disabled}
-                placeholder="gnios::ABC-123 new loan"
+                placeholder={translate(
+                  'auto.components.settings.lineageDiscovery.towerNamePlaceholder',
+                  'gnios::ABC-123 new loan'
+                )}
                 onChange={(event) => setTowerName(event.target.value)}
               />
               {keys ? (

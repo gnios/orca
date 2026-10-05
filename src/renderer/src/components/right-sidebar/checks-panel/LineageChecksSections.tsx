@@ -14,6 +14,7 @@ import { LineageOriginBadge } from '../lineage-origin-badge'
 import { AddManualPullRequest } from '../lineage-members/AddManualPullRequest'
 import { RemoveManualPullRequestButton } from '../lineage-members/RemoveManualPullRequestButton'
 import { ChecksPanelTargetProvider } from './checks-panel-target-worktree'
+import { translate } from '@/i18n/i18n'
 
 type LineageChecksSectionsProps = {
   members: LineageMember[]
@@ -103,8 +104,16 @@ function LineagePullRequestRow({
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={`Open ${label}`}
-          title={`Open ${label}`}
+          aria-label={translate(
+            'auto.components.rightSidebar.lineageChecks.openLabel',
+            'Open {{label}}',
+            { label }
+          )}
+          title={translate(
+            'auto.components.rightSidebar.lineageChecks.openLabel',
+            'Open {{label}}',
+            { label }
+          )}
           onClick={() => openHttpLink(url)}
         >
           <ExternalLink className="size-3.5" />

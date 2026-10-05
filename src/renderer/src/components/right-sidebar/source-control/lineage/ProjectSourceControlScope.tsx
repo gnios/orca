@@ -15,6 +15,7 @@ import {
 } from '../commit/commit-drafts'
 import { ActionButton } from '../listing/action-button'
 import { ProjectSourceControlSectionGroup } from './ProjectSourceControlSectionGroup'
+import { translate } from '@/i18n/i18n'
 
 // why: draft persistence across unmounts requires module-level cache across worktrees
 const globalLineageCommitDrafts: CommitDraftsByWorktree = {}
@@ -45,6 +46,7 @@ function normalizeGitStatus(status?: string): GitFileStatus {
     case 'C':
     case 'copied':
       return 'copied'
+    case undefined:
     default:
       return 'modified'
   }
@@ -330,7 +332,10 @@ export function ProjectSourceControlScope({
           <div className="flex items-center gap-1 shrink-0">
             <ActionButton
               icon={RefreshCw}
-              title="Refresh"
+              title={translate(
+                'auto.components.rightSidebar.lineageSourceControl.refresh',
+                'Refresh'
+              )}
               onClick={(e) => {
                 e.stopPropagation()
                 onRefresh?.()
@@ -346,8 +351,20 @@ export function ProjectSourceControlScope({
               value={commitMessage}
               disabled={isCommitting}
               onChange={handleMessageChange}
-              placeholder={`Message (⌘Enter to commit on "${primaryWorktree?.branch || 'main'}")`}
-              aria-label={`Commit message for ${project.repoName}`}
+              placeholder={translate(
+                'auto.components.rightSidebar.lineageSourceControl.commitPlaceholder',
+                'Message (⌘Enter to commit on "{{branch}}")',
+                {
+                  branch: primaryWorktree?.branch || 'main'
+                }
+              )}
+              aria-label={translate(
+                'auto.components.rightSidebar.lineageSourceControl.commitMessageFor',
+                'Commit message for {{repo}}',
+                {
+                  repo: project.repoName
+                }
+              )}
               data-testid={`commit-input-${project.repoName}`}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -364,7 +381,11 @@ export function ProjectSourceControlScope({
           )}
           {commitSuccess && (
             <div className="text-[11px] text-workspace-status-review mt-1 flex items-center gap-1 font-medium">
-              <Check className="size-3" /> Committed!
+              <Check className="size-3" />{' '}
+              {translate(
+                'auto.components.rightSidebar.lineageSourceControl.committed',
+                'Committed!'
+              )}
             </div>
           )}
 
@@ -376,7 +397,18 @@ export function ProjectSourceControlScope({
             data-testid={`commit-button-${project.repoName}`}
           >
             <Check className="size-3.5" />
-            {isCommitting ? 'Committing...' : `Commit to ${primaryWorktree?.branch || 'main'}`}
+            {isCommitting
+              ? translate(
+                  'auto.components.rightSidebar.lineageSourceControl.committing',
+                  'Committing...'
+                )
+              : translate(
+                  'auto.components.rightSidebar.lineageSourceControl.commitTo',
+                  'Commit to {{branch}}',
+                  {
+                    branch: primaryWorktree?.branch || 'main'
+                  }
+                )}
           </Button>
         </div>
 
