@@ -18,7 +18,7 @@ describe('lineage-git-diff', () => {
     vi.mocked(runnerModule.gitExecFileAsync).mockResolvedValue({
       stdout: '@@ -1,3 +1,4 @@\n line1\n+line2\n line3\n',
       stderr: ''
-    } as any)
+    })
     vi.mocked(statusModule.getDiff).mockResolvedValue({
       kind: 'text',
       originalContent: 'line1\nline3\n',
@@ -56,7 +56,9 @@ describe('lineage-git-diff', () => {
 
   it('returns 500 when diff operation throws an unexpected error', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true)
-    vi.mocked(runnerModule.gitExecFileAsync).mockRejectedValue(new Error('Git fatal: repository corrupt'))
+    vi.mocked(runnerModule.gitExecFileAsync).mockRejectedValue(
+      new Error('Git fatal: repository corrupt')
+    )
     vi.mocked(statusModule.getDiff).mockRejectedValue(new Error('Git fatal: repository corrupt'))
 
     const result = await getLineageFileDiff({

@@ -6,11 +6,18 @@ import {
 } from '../../../src/main/lineage/pty-env-injector'
 import type { LineageStoreContract } from '../../../src/main/lineage/workspace-lineage-service'
 
-const handlers = new Map<string, (_event: unknown, ...args: any[]) => Promise<any>>()
+type IpcResponse = {
+  status?: number
+  registered?: boolean
+  lineageEntry?: { parentWorkspaceKey: string; childWorkspaceKey: string }
+  [key: string]: unknown
+}
+type IpcHandler = (_event: unknown, ...args: unknown[]) => Promise<IpcResponse>
+const handlers = new Map<string, IpcHandler>()
 
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: vi.fn((channel: string, handler: any) => {
+    handle: vi.fn((channel: string, handler: IpcHandler) => {
       handlers.set(channel, handler)
     }),
     removeHandler: vi.fn((channel: string) => {
@@ -73,11 +80,14 @@ describe('workspace-ipc', () => {
     const handler = handlers.get('workspace:notify-worktree-created')
     expect(handler).toBeDefined()
 
-    const response = await handler!({}, {
-      worktreePath: customWorktreePath,
-      repoName: 'my-repo',
-      branch: 'custom-feature'
-    })
+    const response = await handler!(
+      {},
+      {
+        worktreePath: customWorktreePath,
+        repoName: 'my-repo',
+        branch: 'custom-feature'
+      }
+    )
 
     expect(response.status).toBe(200)
     expect(response.registered).toBe(true)
@@ -97,9 +107,12 @@ describe('workspace-ipc', () => {
     })
 
     const handler = handlers.get('workspace:notify-worktree-created')
-    const response = await handler!({}, {
-      worktreePath: ''
-    })
+    const response = await handler!(
+      {},
+      {
+        worktreePath: ''
+      }
+    )
 
     expect(response.status).toBe(400)
     expect(response.registered).toBe(false)
@@ -110,10 +123,13 @@ describe('workspace-ipc', () => {
     clearActiveLineageContext()
 
     const handler = handlers.get('workspace:notify-worktree-created')
-    const response = await handler!({}, {
-      worktreePath: '/tmp/test-wt',
-      repoName: 'repo-1'
-    })
+    const response = await handler!(
+      {},
+      {
+        worktreePath: '/tmp/test-wt',
+        repoName: 'repo-1'
+      }
+    )
 
     expect(response.status).toBe(400)
     expect(response.registered).toBe(false)
@@ -135,10 +151,13 @@ describe('workspace-ipc', () => {
     })
 
     const handler = handlers.get('workspace:notify-worktree-created')
-    const response = await handler!({}, {
-      worktreePath: '/tmp/test-wt',
-      repoName: 'repo-1'
-    })
+    const response = await handler!(
+      {},
+      {
+        worktreePath: '/tmp/test-wt',
+        repoName: 'repo-1'
+      }
+    )
 
     expect(response.status).toBe(500)
     expect(response.registered).toBe(false)
@@ -149,10 +168,13 @@ describe('workspace-ipc', () => {
     const handler = handlers.get('workspace:attach-to-parent')
     expect(handler).toBeDefined()
 
-    const response = await handler!({}, {
-      parentWorkspaceKey: 'folder:parent-abc',
-      childWorkspaceKey: 'worktree:child-xyz'
-    })
+    const response = await handler!(
+      {},
+      {
+        parentWorkspaceKey: 'folder:parent-abc',
+        childWorkspaceKey: 'worktree:child-xyz'
+      }
+    )
 
     expect(response.status).toBe(200)
     expect(response.success).toBe(true)

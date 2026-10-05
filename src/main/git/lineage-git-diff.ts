@@ -47,9 +47,7 @@ export async function getLineageFileDiff(
   try {
     let patch = ''
     try {
-      const diffArgs = staged
-        ? ['diff', '--cached', '--', filePath]
-        : ['diff', '--', filePath]
+      const diffArgs = staged ? ['diff', '--cached', '--', filePath] : ['diff', '--', filePath]
       const diffExec = await gitExecFileAsync(diffArgs, gitOptionsForWorktree(worktreePath))
       patch = diffExec.stdout || ''
     } catch {
@@ -78,14 +76,16 @@ export async function getLineageFileDiff(
       original,
       modified
     }
-  } catch (error: any) {
-    if (error?.code === 'ENOENT' || error?.message?.includes('not found') || error?.message?.includes('does not exist')) {
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    const message = error instanceof Error ? error.message : ''
+    if (code === 'ENOENT' || message.includes('not found') || message.includes('does not exist')) {
       return {
         status: 404,
         patch: '',
         original: '',
         modified: '',
-        error: error.message || `File not found: ${filePath}`
+        error: message || `File not found: ${filePath}`
       }
     }
 

@@ -4,11 +4,16 @@ import os from 'node:os'
 import { getActiveLineageContext } from './pty-env-injector'
 import { notifyWorktreeCreated, type LineageStoreContract } from './workspace-lineage-service'
 
-export interface WorkspacesFsWatcherOptions {
+export type WorkspacesFsWatcherOptions = {
   watchRoot?: string
   debounceMs?: number
   store?: LineageStoreContract
-  onDiscovered?: (info: { worktreePath: string; repoName: string; branch: string; childKey: string }) => void
+  onDiscovered?: (info: {
+    worktreePath: string
+    repoName: string
+    branch: string
+    childKey: string
+  }) => void
 }
 
 let activeWatcher: fs.FSWatcher | null = null
@@ -49,7 +54,9 @@ export function handleDiscoveredWorktree(
     return false
   }
 
-  const watchRoot = options?.watchRoot ? path.resolve(options.watchRoot) : getDefaultWorkspacesRoot()
+  const watchRoot = options?.watchRoot
+    ? path.resolve(options.watchRoot)
+    : getDefaultWorkspacesRoot()
   const resolvedWorktreePath = path.resolve(worktreePath)
   const relativePath = path.relative(watchRoot, resolvedWorktreePath)
 
@@ -99,7 +106,9 @@ export function handleDiscoveredWorktree(
 
 export function findGitPointers(dir: string, maxDepth = 4): string[] {
   const results: string[] = []
-  if (maxDepth <= 0 || !fs.existsSync(dir)) return results
+  if (maxDepth <= 0 || !fs.existsSync(dir)) {
+    return results
+  }
 
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -114,7 +123,9 @@ export function findGitPointers(dir: string, maxDepth = 4): string[] {
   return results
 }
 
-export function startWorkspacesFsWatcher(options: WorkspacesFsWatcherOptions = {}): fs.FSWatcher | null {
+export function startWorkspacesFsWatcher(
+  options: WorkspacesFsWatcherOptions = {}
+): fs.FSWatcher | null {
   stopWorkspacesFsWatcher()
 
   const watchRoot = options.watchRoot ? path.resolve(options.watchRoot) : getDefaultWorkspacesRoot()

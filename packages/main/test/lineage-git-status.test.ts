@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import type { WorkspaceKey } from '../../../src/shared/folder-workspace-types'
 import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
 import type { GitStatusResult } from '../../../src/shared/git-status-types'
 import {
@@ -73,10 +74,10 @@ describe('lineage-git-status', () => {
       fs.mkdirSync(wtDir, { recursive: true })
       existingPaths.set(`repo-${i % 3}::${wtDir}`, wtDir)
 
-      const childKey = `worktree:repo-${i % 3}::${wtDir}`
+      const childKey: WorkspaceKey = `worktree:repo-${i % 3}::${wtDir}`
       store.setWorkspaceLineage({
-        childWorkspaceKey: childKey as any,
-        parentWorkspaceKey: parentWorkspaceKey as any,
+        childWorkspaceKey: childKey,
+        parentWorkspaceKey: parentWorkspaceKey,
         childInstanceId: `inst-${i}`,
         parentInstanceId: null,
         origin: 'cli',
@@ -115,8 +116,8 @@ describe('lineage-git-status', () => {
     fs.mkdirSync(authDir, { recursive: true })
 
     store.setWorkspaceLineage({
-      childWorkspaceKey: `worktree:loans-bff::${loansDir1}` as any,
-      parentWorkspaceKey: parentWorkspaceKey as any,
+      childWorkspaceKey: `worktree:loans-bff::${loansDir1}`,
+      parentWorkspaceKey: parentWorkspaceKey,
       childInstanceId: 'inst-1',
       parentInstanceId: null,
       origin: 'cli',
@@ -124,8 +125,8 @@ describe('lineage-git-status', () => {
       createdAt: Date.now()
     })
     store.setWorkspaceLineage({
-      childWorkspaceKey: `worktree:loans-bff::${loansDir2}` as any,
-      parentWorkspaceKey: parentWorkspaceKey as any,
+      childWorkspaceKey: `worktree:loans-bff::${loansDir2}`,
+      parentWorkspaceKey: parentWorkspaceKey,
       childInstanceId: 'inst-2',
       parentInstanceId: null,
       origin: 'cli',
@@ -133,8 +134,8 @@ describe('lineage-git-status', () => {
       createdAt: Date.now()
     })
     store.setWorkspaceLineage({
-      childWorkspaceKey: `worktree:auth-service::${authDir}` as any,
-      parentWorkspaceKey: parentWorkspaceKey as any,
+      childWorkspaceKey: `worktree:auth-service::${authDir}`,
+      parentWorkspaceKey: parentWorkspaceKey,
       childInstanceId: 'inst-3',
       parentInstanceId: null,
       origin: 'cli',
@@ -156,9 +157,7 @@ describe('lineage-git-status', () => {
       if (worktreePath.includes('auth-service')) {
         return {
           branch: 'fix-token',
-          entries: [
-            { path: 'src/jwt.ts', status: 'modified', area: 'unstaged' }
-          ],
+          entries: [{ path: 'src/jwt.ts', status: 'modified', area: 'unstaged' }],
           conflictOperation: 'unknown'
         }
       }
@@ -202,8 +201,8 @@ describe('lineage-git-status', () => {
     // deletedDir is NOT created on disk
 
     store.setWorkspaceLineage({
-      childWorkspaceKey: `worktree:active-repo::${existingDir}` as any,
-      parentWorkspaceKey: parentWorkspaceKey as any,
+      childWorkspaceKey: `worktree:active-repo::${existingDir}`,
+      parentWorkspaceKey: parentWorkspaceKey,
       childInstanceId: 'inst-live',
       parentInstanceId: null,
       origin: 'cli',
@@ -211,8 +210,8 @@ describe('lineage-git-status', () => {
       createdAt: Date.now()
     })
     store.setWorkspaceLineage({
-      childWorkspaceKey: `worktree:active-repo::${deletedDir}` as any,
-      parentWorkspaceKey: parentWorkspaceKey as any,
+      childWorkspaceKey: `worktree:active-repo::${deletedDir}`,
+      parentWorkspaceKey: parentWorkspaceKey,
       childInstanceId: 'inst-deleted',
       parentInstanceId: null,
       origin: 'cli',
@@ -233,7 +232,9 @@ describe('lineage-git-status', () => {
     expect(payload.status).toBe(200)
     expect(payload.projects['active-repo']).toBeDefined()
     expect(payload.projects['active-repo'].worktrees).toHaveLength(1)
-    expect(payload.projects['active-repo'].worktrees[0].worktreePath).toBe(path.resolve(existingDir))
+    expect(payload.projects['active-repo'].worktrees[0].worktreePath).toBe(
+      path.resolve(existingDir)
+    )
   })
 
   it('validates empty commit message in commitLineageProject (C11)', async () => {

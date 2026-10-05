@@ -1,4 +1,4 @@
-export interface ActiveLineageContext {
+export type ActiveLineageContext = {
   parentWorkspaceKey: string
   parentSessionId: string
 }
@@ -42,17 +42,13 @@ export function injectLineageEnv<T extends Record<string, string | undefined>>(
   const context = getActiveLineageContext()
   const parentWorkspaceKey =
     (sourceContext as Partial<ActiveLineageContext>)?.parentWorkspaceKey ??
-    (sourceContext as Record<string, string | undefined>)?.[
-      'ORCA_PARENT_WORKSPACE_KEY'
-    ] ??
+    (sourceContext as Record<string, string | undefined>)?.['ORCA_PARENT_WORKSPACE_KEY'] ??
     context?.parentWorkspaceKey ??
     process.env.ORCA_PARENT_WORKSPACE_KEY
 
   const parentSessionId =
     (sourceContext as Partial<ActiveLineageContext>)?.parentSessionId ??
-    (sourceContext as Record<string, string | undefined>)?.[
-      'ORCA_PARENT_SESSION_ID'
-    ] ??
+    (sourceContext as Record<string, string | undefined>)?.['ORCA_PARENT_SESSION_ID'] ??
     context?.parentSessionId ??
     process.env.ORCA_PARENT_SESSION_ID
 
