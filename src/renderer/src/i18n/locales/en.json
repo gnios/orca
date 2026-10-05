@@ -16905,12 +16905,26 @@
           "openLabel": "Open {{label}}"
         },
         "lineageMembers": {
-          "addPullRequestFailed": "Could not add the pull request",
           "addPullRequestPlaceholder": "https://github.com/org/repo/pull/12 or repo#12",
           "addPullRequestSubmit": "Add",
-          "addPullRequest": "Add PR",
           "removePullRequest": "Remove",
-          "linkPullRequestElsewhere": "Link pull request from another repository…"
+          "addToTower": {
+            "searchRepositories": "Search repositories…",
+            "noRepositories": "No repositories found",
+            "searchBranches": "Search branches…",
+            "noBranches": "No branches found",
+            "changeRepository": "Change repository",
+            "open": "Add to control tower…",
+            "title": "Add to control tower",
+            "description": "Pick a worktree, a branch or a pull request from any registered repository. Checks and Source Control show it for this workspace.",
+            "worktree": "Worktree",
+            "branch": "Branch",
+            "pullRequest": "Pull request",
+            "failed": "Could not add to the control tower",
+            "searchWorktrees": "Search worktrees…",
+            "noWorktrees": "No worktrees found"
+          },
+          "removeFailed": "Could not remove {{label}}"
         },
         "lineageOrigin": {
           "matchedBy": "Matched by {{matchedBy}}"

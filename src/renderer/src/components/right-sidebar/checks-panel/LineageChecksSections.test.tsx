@@ -189,11 +189,11 @@ describe('LineageChecksSections', () => {
     }
   })
 
-  it('renders the Add PR control in the sections header when a workspace key is given', () => {
+  it('renders the shared add control in the sections header when a workspace key is given', async () => {
     const { rerender } = render(
       <LineageChecksSections members={members} PanelComponent={StubPanel} />
     )
-    expect(screen.queryByRole('button', { name: 'Add PR' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add to control tower…' })).toBeNull()
     rerender(
       <LineageChecksSections
         members={members}
@@ -201,6 +201,51 @@ describe('LineageChecksSections', () => {
         parentWorkspaceKey="tower"
       />
     )
-    expect(screen.getByRole('button', { name: 'Add PR' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Add to control tower…' }))
+    expect(await screen.findByRole('dialog', { name: 'Add to control tower' })).toBeTruthy()
+  })
+
+  it('offers Remove on the sub-row of a manual worktree when a repo has several', async () => {
+    const removeLink = vi.fn().mockResolvedValue({ success: true })
+    const second = makeWorktree({ id: 'repo-api::/w/api-2', repoId: 'repo-api', path: '/w/api-2' })
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-api': [apiWorktree, second], 'repo-web': [webWorktree] }
+    })
+    const originalApi = window.api
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      writable: true,
+      value: { ...originalApi, git: { lineageRemoveManualLink: removeLink } }
+    })
+    try {
+      render(
+        <LineageChecksSections
+          members={[
+            members[0],
+            {
+              repoName: 'api',
+              branch: 'feat/manual',
+              worktreeId: second.id,
+              worktreePath: second.path,
+              matchedBy: 'manual',
+              reasons: ['added manually'],
+              manualLinkId: 'm2'
+            }
+          ]}
+          PanelComponent={StubPanel}
+          parentWorkspaceKey="tower"
+        />
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Remove api (feat/manual)' }))
+      await waitFor(() =>
+        expect(removeLink).toHaveBeenCalledWith({ parentWorkspaceKey: 'tower', linkId: 'm2' })
+      )
+    } finally {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        writable: true,
+        value: originalApi
+      })
+    }
   })
 })

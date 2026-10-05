@@ -4,6 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LineageMember } from '../../../../../../shared/lineage-discovery-types'
 import { useAppStore } from '@/store'
+import { useContext } from 'react'
+import { AddToTowerEntryContext } from '../../lineage-members/add-to-tower-entry'
 
 type LineageMembersStub = { members: LineageMember[]; loading: boolean; supported: boolean }
 
@@ -20,14 +22,25 @@ vi.mock('../../lineage-members/use-lineage-members', () => ({
   }
 }))
 vi.mock('../lineage/LineageSourceControlSections', () => ({
-  LineageSourceControlSections: ({ members }: { members: LineageMember[] }) => (
-    <div data-testid="lineage-source-control">
+  LineageSourceControlSections: ({
+    members,
+    parentWorkspaceKey
+  }: {
+    members: LineageMember[]
+    parentWorkspaceKey?: string
+  }) => (
+    <div data-testid="lineage-source-control" data-tower={parentWorkspaceKey ?? ''}>
       {members.map((member) => member.repoName).join(',')}
     </div>
   )
 }))
 vi.mock('./panel-ready', () => ({
-  SourceControlPanelReady: () => <div data-testid="standard-source-control" />
+  SourceControlPanelReady: function StandardPanelStub() {
+    const entry = useContext(AddToTowerEntryContext)
+    return (
+      <div data-testid="standard-source-control" data-add-entry={entry?.parentWorkspaceKey ?? ''} />
+    )
+  }
 }))
 vi.mock('./use-panel-model', () => ({
   useSourceControlPanelModel: () => ({
@@ -105,5 +118,27 @@ describe('SourceControlPanel lineage routing', () => {
     lineage.result = { members: [], loading: true, supported: false }
     render(<SourceControlPanel />)
     expect(screen.getByTestId('standard-source-control')).toBeTruthy()
+  })
+
+  it('hands the tower key to the sections so they can add and remove', () => {
+    lineage.result = {
+      members: [{ ...towerSelf, isTower: true }, child],
+      loading: false,
+      supported: true
+    }
+    render(<SourceControlPanel />)
+    expect(screen.getByTestId('lineage-source-control').dataset.tower).toBe(`worktree:${TOWER_ID}`)
+  })
+
+  it('offers the add entry to the standard panel only while the host supports lineage', () => {
+    lineage.result = { members: [{ ...towerSelf, isTower: true }], loading: false, supported: true }
+    const { unmount } = render(<SourceControlPanel />)
+    expect(screen.getByTestId('standard-source-control').dataset.addEntry).toBe(
+      `worktree:${TOWER_ID}`
+    )
+    unmount()
+    lineage.result = { members: [], loading: false, supported: false }
+    render(<SourceControlPanel />)
+    expect(screen.getByTestId('standard-source-control').dataset.addEntry).toBe('')
   })
 })

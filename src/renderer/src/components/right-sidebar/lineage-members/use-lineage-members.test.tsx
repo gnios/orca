@@ -126,4 +126,28 @@ describe('useLineageMembers', () => {
 
     expect(getMembers).toHaveBeenLastCalledWith({ parentWorkspaceKey: 'folder:t', force: true })
   })
+
+  it('a refresh in one tab re-fetches every other mounted reader of the same tower', async () => {
+    getMembers.mockResolvedValue({ parentWorkspaceKey: 'folder:t', keys: [], members: [] })
+    const checks = renderHook(() => useLineageMembers('folder:t'))
+    renderHook(() => useLineageMembers('folder:t'))
+    renderHook(() => useLineageMembers('folder:other'))
+    await waitFor(() => expect(getMembers).toHaveBeenCalledTimes(3))
+    getMembers.mockClear()
+    getMembers.mockResolvedValue({
+      parentWorkspaceKey: 'folder:t',
+      keys: [],
+      members: [memberFor('api')]
+    })
+
+    await act(async () => {
+      await checks.result.current.refresh()
+    })
+
+    await waitFor(() => expect(getMembers).toHaveBeenCalledTimes(2))
+    expect(getMembers.mock.calls.map(([args]) => args)).toEqual([
+      { parentWorkspaceKey: 'folder:t', force: true },
+      { parentWorkspaceKey: 'folder:t' }
+    ])
+  })
 })

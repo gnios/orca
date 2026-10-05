@@ -43,10 +43,10 @@ import { useActiveWorktree } from '@/store/selectors'
 import { useLineageMembers } from './lineage-members/use-lineage-members'
 import { LineageChecksSections } from './checks-panel/LineageChecksSections'
 import {
-  ManualPullRequestDialog,
-  ManualPullRequestEntryContext,
-  ManualPullRequestMenuItem
-} from './checks-panel/ManualPullRequestEntry'
+  AddToTowerContextDialog,
+  AddToTowerEntryContext,
+  AddToTowerMenuItem
+} from './lineage-members/add-to-tower-entry'
 import { hasMembersBeyondTower } from './lineage-members/lineage-tower-members'
 
 type ChecksPanelReviewHeaderProps = {
@@ -152,10 +152,10 @@ export function ChecksPanelReviewHeader({
                   'Link another PR'
                 )}
           </DropdownMenuItem>
-          <ManualPullRequestMenuItem onOpen={() => setLinkDialogOpen(true)} />
+          <AddToTowerMenuItem onOpen={() => setLinkDialogOpen(true)} />
         </DropdownMenuContent>
       </DropdownMenu>
-      <ManualPullRequestDialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
+      <AddToTowerContextDialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
     </div>
   )
 }
@@ -227,8 +227,8 @@ export default function ChecksPanel(): React.JSX.Element {
     )
   }
   return (
-    <ManualPullRequestEntryContext.Provider value={entry}>
+    <AddToTowerEntryContext.Provider value={entry}>
       <SingleWorktreeChecksPanel />
-    </ManualPullRequestEntryContext.Provider>
+    </AddToTowerEntryContext.Provider>
   )
 }

@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils'
 import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { LineageOriginBadge } from '../lineage-origin-badge'
-import { AddManualPullRequest } from '../lineage-members/AddManualPullRequest'
-import { RemoveManualPullRequestButton } from '../lineage-members/RemoveManualPullRequestButton'
+import { AddToTowerButton } from '../lineage-members/AddToTowerDialog'
+import { RemoveManualLinkButton } from '../lineage-members/RemoveManualLinkButton'
 import {
   LineagePullRequestRow as SharedLineagePullRequestRow,
   lineagePullRequestLabel as pullRequestLabel,
@@ -21,7 +21,7 @@ type LineageChecksSectionsProps = {
   members: LineageMember[]
   /** The original single-worktree Checks panel, rendered once per member worktree. */
   PanelComponent: React.ComponentType
-  /** Enables Add PR and Remove; absent when the host cannot persist manual links. */
+  /** Enables add and Remove; absent when the host cannot persist manual links. */
   parentWorkspaceKey?: string
   /** Called after a manual link is added or removed so members can be re-fetched. */
   onMembersChanged?: () => void
@@ -66,7 +66,7 @@ function ManualRemoveButton({
     return null
   }
   return (
-    <RemoveManualPullRequestButton
+    <RemoveManualLinkButton
       parentWorkspaceKey={actions.parentWorkspaceKey}
       linkId={member.manualLinkId}
       label={pullRequestLabel(member)}
@@ -147,7 +147,7 @@ function LineageChecksSection({
             </span>
           </Button>
         </CollapsibleTrigger>
-        <ManualRemoveButton member={lead.member} actions={actions} />
+        {worktreeCount <= 1 ? <ManualRemoveButton member={lead.member} actions={actions} /> : null}
       </div>
       {/* invariant: Radix unmounts closed content, so a collapsed section runs no panel fetches or polling */}
       <CollapsibleContent className="flex flex-col">
@@ -155,7 +155,10 @@ function LineageChecksSection({
           worktree ? (
             <div key={worktree.id} className="flex flex-col">
               {worktreeCount > 1 ? (
-                <div className="px-4 pt-1 text-[11px] text-muted-foreground">{member.branch}</div>
+                <div className="flex items-center gap-1 pl-4 pr-3 pt-1 text-[11px] text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate">{member.branch}</span>
+                  <ManualRemoveButton member={member} actions={actions} />
+                </div>
               ) : null}
               <ChecksPanelTargetProvider worktree={worktree} isActive={isOpen}>
                 <PanelComponent />
@@ -163,7 +166,7 @@ function LineageChecksSection({
             </div>
           ) : (
             <LineagePullRequestRow
-              key={pullRequestLabel(member)}
+              key={member.manualLinkId ?? pullRequestLabel(member)}
               member={member}
               actions={actions}
             />
@@ -197,7 +200,7 @@ export function LineageChecksSections({
       >
         {actions ? (
           <div className="flex justify-end px-3 pt-1.5">
-            <AddManualPullRequest
+            <AddToTowerButton
               parentWorkspaceKey={actions.parentWorkspaceKey}
               onChanged={actions.onChanged}
             />
@@ -222,7 +225,7 @@ export function LineageChecksSections({
             ) : (
               group.entries.map(({ member }) => (
                 <LineagePullRequestRow
-                  key={pullRequestLabel(member)}
+                  key={member.manualLinkId ?? pullRequestLabel(member)}
                   member={member}
                   actions={actions}
                 />

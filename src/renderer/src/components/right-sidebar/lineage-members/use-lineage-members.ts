@@ -17,6 +17,10 @@ export type UseLineageMembersResult = {
 
 const NO_MEMBERS: LineageMember[] = []
 
+type MembersChangedListener = (parentWorkspaceKey: string, source: symbol) => void
+// invariant: Checks, Source Control and the tab rule each mount this hook; a refresh in one reaches all of them
+const membersChangedListeners = new Set<MembersChangedListener>()
+
 export function useLineageMembers(parentWorkspaceKey: string | null): UseLineageMembersResult {
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const [state, setState] = useState<LineageMembersState>({
@@ -67,12 +71,34 @@ export function useLineageMembers(parentWorkspaceKey: string | null): UseLineage
     },
     [parentWorkspaceKey]
   )
+  const [instanceId] = useState(() => Symbol('lineage-members'))
   // invariant: an explicit refresh bypasses main's short-lived scan cache; mount/lineage changes may reuse it
-  const refresh = useCallback(() => load(true), [load])
+  const refresh = useCallback(async () => {
+    const forced = load(true)
+    // why: sent after the forced request so the other readers reuse the scan it just started
+    if (parentWorkspaceKey) {
+      for (const listener of membersChangedListeners) {
+        listener(parentWorkspaceKey, instanceId)
+      }
+    }
+    await forced
+  }, [instanceId, load, parentWorkspaceKey])
 
   useEffect(() => {
     void load(false)
   }, [load, workspaceLineageByChildKey])
+
+  useEffect(() => {
+    const listener: MembersChangedListener = (changedKey, source) => {
+      if (source !== instanceId && changedKey === parentWorkspaceKey) {
+        void load(false)
+      }
+    }
+    membersChangedListeners.add(listener)
+    return () => {
+      membersChangedListeners.delete(listener)
+    }
+  }, [instanceId, load, parentWorkspaceKey])
 
   // invariant: members fetched for a previous workspace are never shown for the current one
   const isCurrent = state.key === parentWorkspaceKey

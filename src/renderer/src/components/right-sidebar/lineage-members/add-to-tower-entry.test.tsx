@@ -4,24 +4,24 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import {
-  ManualPullRequestDialog,
-  ManualPullRequestEmptyAction,
-  ManualPullRequestEntryContext,
-  ManualPullRequestMenuItem
-} from './ManualPullRequestEntry'
-import { useState } from 'react'
+  AddToTowerContextDialog,
+  AddToTowerEmptyAction,
+  AddToTowerEntryContext,
+  AddToTowerMenuItem
+} from './add-to-tower-entry'
 
 const originalApi = window.api
 const addLink = vi.fn()
 const onChanged = vi.fn()
 const PLACEHOLDER = 'https://github.com/org/repo/pull/12 or repo#12'
-const LABEL = 'Link pull request from another repository…'
+const LABEL = 'Add to control tower…'
 
 function MenuHarness(): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -30,10 +30,10 @@ function MenuHarness(): React.JSX.Element {
       <DropdownMenu>
         <DropdownMenuTrigger>menu</DropdownMenuTrigger>
         <DropdownMenuContent>
-          <ManualPullRequestMenuItem onOpen={() => setOpen(true)} />
+          <AddToTowerMenuItem onOpen={() => setOpen(true)} />
         </DropdownMenuContent>
       </DropdownMenu>
-      <ManualPullRequestDialog open={open} onOpenChange={setOpen} />
+      <AddToTowerContextDialog open={open} onOpenChange={setOpen} />
     </>
   )
 }
@@ -42,9 +42,9 @@ const enabledEntry = { parentWorkspaceKey: 'tower', onChanged }
 
 function withEntry(ui: React.ReactNode, enabled: boolean): React.JSX.Element {
   return (
-    <ManualPullRequestEntryContext.Provider value={enabled ? enabledEntry : null}>
+    <AddToTowerEntryContext.Provider value={enabled ? enabledEntry : null}>
       {ui}
-    </ManualPullRequestEntryContext.Provider>
+    </AddToTowerEntryContext.Provider>
   )
 }
 
@@ -63,21 +63,26 @@ afterEach(() => {
   Object.defineProperty(window, 'api', { configurable: true, writable: true, value: originalApi })
 })
 
-describe('ManualPullRequestEntry', () => {
-  it('shows the menu item when supported and opens the add flow, then refreshes on success', async () => {
+describe('add-to-tower entry points', () => {
+  it('opens the shared dialog from the menu item and refreshes on success', async () => {
     addLink.mockResolvedValue({ success: true })
     const user = userEvent.setup()
     render(withEntry(<MenuHarness />, true))
     await user.click(screen.getByText('menu'))
     await user.click(await screen.findByText(LABEL))
-    const input = await screen.findByPlaceholderText(PLACEHOLDER)
-    fireEvent.change(input, { target: { value: 'api#12' } })
+    expect(await screen.findByRole('dialog', { name: 'Add to control tower' })).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'Pull request' }))
+    fireEvent.change(screen.getByPlaceholderText(PLACEHOLDER), { target: { value: 'api#12' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     await waitFor(() =>
-      expect(addLink).toHaveBeenCalledWith({ parentWorkspaceKey: 'tower', reference: 'api#12' })
+      expect(addLink).toHaveBeenCalledWith({
+        parentWorkspaceKey: 'tower',
+        reference: 'api#12',
+        target: { kind: 'pr', reference: 'api#12' }
+      })
     )
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(screen.queryByPlaceholderText(PLACEHOLDER)).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('renders no menu item when lineage is unsupported', async () => {
@@ -88,11 +93,12 @@ describe('ManualPullRequestEntry', () => {
     expect(screen.queryByText(LABEL)).toBeNull()
   })
 
-  it('offers the empty-state action only when supported', () => {
-    const { unmount } = render(withEntry(<ManualPullRequestEmptyAction />, true))
-    expect(screen.getByRole('button', { name: LABEL })).toBeInTheDocument()
+  it('offers the empty-state action only when supported, and it opens the same dialog', async () => {
+    const { unmount } = render(withEntry(<AddToTowerEmptyAction />, true))
+    fireEvent.click(screen.getByRole('button', { name: LABEL }))
+    expect(await screen.findByRole('dialog', { name: 'Add to control tower' })).toBeInTheDocument()
     unmount()
-    const { container } = render(withEntry(<ManualPullRequestEmptyAction />, false))
+    const { container } = render(withEntry(<AddToTowerEmptyAction />, false))
     expect(container).toBeEmptyDOMElement()
   })
 })

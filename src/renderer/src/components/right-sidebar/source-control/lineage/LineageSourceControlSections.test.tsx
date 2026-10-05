@@ -1,6 +1,6 @@
 // why: the sections render through React DOM, so @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LineageMember } from '../../../../../../shared/lineage-discovery-types'
 import { useAppStore } from '@/store'
@@ -160,5 +160,63 @@ describe('LineageSourceControlSections', () => {
     fireEvent.click(within(row).getByRole('button', { name: 'Open docs#5' }))
     expect(linkOpener.openHttpLink).toHaveBeenCalledWith('https://github.com/acme/docs/pull/5')
     expect(panelMounts.some((mount) => mount.worktreeId === undefined)).toBe(false)
+  })
+
+  it('offers the shared add control only when a workspace key is given', async () => {
+    const { rerender } = render(
+      <LineageSourceControlSections members={members} PanelComponent={StubPanel} />
+    )
+    expect(screen.queryByRole('button', { name: 'Add to control tower…' })).toBeNull()
+    rerender(
+      <LineageSourceControlSections
+        members={members}
+        PanelComponent={StubPanel}
+        parentWorkspaceKey="tower"
+        onMembersChanged={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to control tower…' }))
+    expect(await screen.findByRole('dialog', { name: 'Add to control tower' })).toBeTruthy()
+  })
+
+  it('removes a manual member from its section header and from a compact row', async () => {
+    const removeLink = vi.fn().mockResolvedValue({ success: true })
+    const onMembersChanged = vi.fn()
+    const originalApi = window.api
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      writable: true,
+      value: { ...originalApi, git: { lineageRemoveManualLink: removeLink } }
+    })
+    const manualWorktree: LineageMember = { ...members[1], matchedBy: 'manual', manualLinkId: 'm9' }
+    try {
+      render(
+        <LineageSourceControlSections
+          members={[members[0], manualWorktree, members[3]]}
+          PanelComponent={StubPanel}
+          parentWorkspaceKey="tower"
+          onMembersChanged={onMembersChanged}
+        />
+      )
+      const section = screen.getByTestId(`lineage-source-control-section-${apiWorktree.id}`)
+      fireEvent.click(within(section).getByRole('button', { name: 'Remove api (feat/ABC-1)' }))
+      await waitFor(() =>
+        expect(removeLink).toHaveBeenCalledWith({ parentWorkspaceKey: 'tower', linkId: 'm9' })
+      )
+      const row = screen.getByTestId('lineage-source-control-pr-row-m1')
+      fireEvent.click(within(row).getByRole('button', { name: 'Remove docs#5' }))
+      await waitFor(() =>
+        expect(removeLink).toHaveBeenCalledWith({ parentWorkspaceKey: 'tower', linkId: 'm1' })
+      )
+      await waitFor(() => expect(onMembersChanged).toHaveBeenCalledTimes(2))
+      const tower = screen.getByTestId(`lineage-source-control-section-${towerWorktree.id}`)
+      expect(within(tower).queryByRole('button', { name: /^Remove / })).toBeNull()
+    } finally {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        writable: true,
+        value: originalApi
+      })
+    }
   })
 })

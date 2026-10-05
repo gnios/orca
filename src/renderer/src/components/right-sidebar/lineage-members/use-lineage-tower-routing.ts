@@ -9,6 +9,9 @@ export type LineageTowerRouting = {
   /** True only once the host answered and resolved members beyond the tower itself. */
   showLineage: boolean
   members: LineageMember[]
+  /** The host answered the members request; gates adding to the tower. */
+  supported: boolean
+  refresh: () => Promise<void>
 }
 
 /** invariant: Source Control, Checks and the tab rule route on the same resolved members from main. */
@@ -18,8 +21,8 @@ export function useLineageTowerRouting(enabled = true): LineageTowerRouting {
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreePath = useActiveWorktree()?.path ?? null
-  const { members, supported } = useLineageMembers(towerKey)
+  const { members, supported, refresh } = useLineageMembers(towerKey)
   const showLineage =
     supported && hasMembersBeyondTower(members, { id: activeWorktreeId, path: activeWorktreePath })
-  return { towerKey, showLineage, members }
+  return { towerKey, showLineage, members, supported, refresh }
 }

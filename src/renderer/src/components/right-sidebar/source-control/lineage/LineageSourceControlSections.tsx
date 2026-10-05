@@ -14,6 +14,8 @@ import {
   lineagePullRequestLabel
 } from '../../lineage-members/LineagePullRequestRow'
 import { useLineageMemberWorktreeResolver } from '../../lineage-members/use-lineage-member-worktree'
+import { AddToTowerButton } from '../../lineage-members/AddToTowerDialog'
+import { RemoveManualLinkButton } from '../../lineage-members/RemoveManualLinkButton'
 import { SourceControlTargetProvider } from '../panel/source-control-target-worktree'
 import { translate } from '@/i18n/i18n'
 
@@ -21,6 +23,32 @@ type LineageSourceControlSectionsProps = {
   members: LineageMember[]
   /** The original single-worktree Source Control panel, rendered once per member worktree. */
   PanelComponent: React.ComponentType
+  /** Enables add and Remove; absent when the host cannot persist manual links. */
+  parentWorkspaceKey?: string
+  /** Called after a manual link is added or removed so members can be re-fetched. */
+  onMembersChanged?: () => void
+}
+
+type ManualLinkActions = { parentWorkspaceKey: string; onChanged: () => void }
+
+function ManualRemoveButton({
+  member,
+  actions
+}: {
+  member: LineageMember
+  actions?: ManualLinkActions
+}): React.JSX.Element | null {
+  if (!actions || !member.manualLinkId) {
+    return null
+  }
+  return (
+    <RemoveManualLinkButton
+      parentWorkspaceKey={actions.parentWorkspaceKey}
+      linkId={member.manualLinkId}
+      label={lineagePullRequestLabel(member)}
+      onChanged={actions.onChanged}
+    />
+  )
 }
 
 type MemberEntry = { key: string; member: LineageMember; worktree: Worktree | null }
@@ -34,13 +62,15 @@ function LineageSourceControlSection({
   worktree,
   isOpen,
   onOpenChange,
-  PanelComponent
+  PanelComponent,
+  actions
 }: {
   member: LineageMember
   worktree: Worktree
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   PanelComponent: React.ComponentType
+  actions?: ManualLinkActions
 }): React.JSX.Element {
   const identity = getWorktreeGitIdentityDisplay(worktree)
   // why: the section holds this worktree's panel, so its checked-out branch wins over discovery's report
@@ -97,6 +127,7 @@ function LineageSourceControlSection({
             </span>
           </Button>
         </CollapsibleTrigger>
+        <ManualRemoveButton member={member} actions={actions} />
       </div>
       {/* invariant: Radix unmounts closed content, so a collapsed section runs no git status, compare or review polling */}
       <CollapsibleContent className="flex flex-col">
@@ -111,7 +142,9 @@ function LineageSourceControlSection({
 /** One collapsible original Source Control panel per member worktree the tower opened. */
 export function LineageSourceControlSections({
   members,
-  PanelComponent
+  PanelComponent,
+  parentWorkspaceKey,
+  onMembersChanged
 }: LineageSourceControlSectionsProps): React.JSX.Element {
   const resolveWorktree = useLineageMemberWorktreeResolver()
   const [openByKey, setOpenByKey] = useState<Record<string, boolean>>({})
@@ -136,6 +169,9 @@ export function LineageSourceControlSections({
     return resolved
   }, [members, resolveWorktree])
   const firstSectionKey = entries.find((entry) => entry.worktree !== null)?.key
+  const actions: ManualLinkActions | undefined = parentWorkspaceKey
+    ? { parentWorkspaceKey, onChanged: onMembersChanged ?? (() => {}) }
+    : undefined
 
   return (
     <TooltipProvider>
@@ -143,6 +179,14 @@ export function LineageSourceControlSections({
         className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek"
         data-testid="lineage-source-control-sections"
       >
+        {actions ? (
+          <div className="flex justify-end px-3 pt-1.5">
+            <AddToTowerButton
+              parentWorkspaceKey={actions.parentWorkspaceKey}
+              onChanged={actions.onChanged}
+            />
+          </div>
+        ) : null}
         <div className="flex flex-col divide-y divide-border/40">
           {entries.map(({ key, member, worktree }) =>
             worktree ? (
@@ -153,12 +197,14 @@ export function LineageSourceControlSections({
                 isOpen={openByKey[key] ?? key === firstSectionKey}
                 onOpenChange={(open) => setOpenByKey((current) => ({ ...current, [key]: open }))}
                 PanelComponent={PanelComponent}
+                actions={actions}
               />
             ) : (
               <LineagePullRequestRow
                 key={key}
                 member={member}
                 testId={`lineage-source-control-pr-row-${member.manualLinkId ?? lineagePullRequestLabel(member)}`}
+                trailing={<ManualRemoveButton member={member} actions={actions} />}
               />
             )
           )}

@@ -14,12 +14,13 @@ export function lineagePullRequestNumberLabel(pr: LineageMemberPullRequest): str
 }
 
 export function lineagePullRequestLabel(member: LineageMember): string {
-  return member.pr
-    ? `${member.repoName}${lineagePullRequestNumberLabel(member.pr)}`
-    : member.repoName
+  if (member.pr) {
+    return `${member.repoName}${lineagePullRequestNumberLabel(member.pr)}`
+  }
+  return member.branch ? `${member.repoName} (${member.branch})` : member.repoName
 }
 
-/** Compact row for a member with no local worktree (a manual PR): nothing to inspect, only a link. */
+/** Compact row for a member with no local worktree (a manual PR or branch not checked out): only a link. */
 export function LineagePullRequestRow({
   member,
   testId,
