@@ -19,9 +19,11 @@ vi.mock('../../lineage-members/use-lineage-members', () => ({
     return { ...lineage.result, refresh: async () => {} }
   }
 }))
-vi.mock('../lineage/LineageSourceControl', () => ({
-  LineageSourceControl: ({ parentWorkspaceKey }: { parentWorkspaceKey?: string }) => (
-    <div data-testid="lineage-source-control">{parentWorkspaceKey}</div>
+vi.mock('../lineage/LineageSourceControlSections', () => ({
+  LineageSourceControlSections: ({ members }: { members: LineageMember[] }) => (
+    <div data-testid="lineage-source-control">
+      {members.map((member) => member.repoName).join(',')}
+    </div>
   )
 }))
 vi.mock('./panel-ready', () => ({
@@ -81,14 +83,15 @@ describe('SourceControlPanel lineage routing', () => {
     expect(screen.getByTestId('standard-source-control')).toBeTruthy()
   })
 
-  it('routes a tower with a child to the lineage panel for the same key Checks uses', () => {
+  it('routes a tower with a child to per-member sections for the same key Checks uses', () => {
     lineage.result = {
       members: [{ ...towerSelf, isTower: true }, child],
       loading: false,
       supported: true
     }
     render(<SourceControlPanel />)
-    expect(screen.getByTestId('lineage-source-control').textContent).toBe(`worktree:${TOWER_ID}`)
+    expect(screen.getByTestId('lineage-source-control').textContent).toBe('repo1,api')
+    expect(screen.queryByTestId('standard-source-control')).toBeNull()
     expect(lineage.keys.at(-1)).toBe(`worktree:${TOWER_ID}`)
   })
 

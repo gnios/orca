@@ -1,23 +1,21 @@
 import React, { useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, FolderGit2 } from 'lucide-react'
+import { ChevronDown, FolderGit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type {
-  LineageMember,
-  LineageMemberPullRequest
-} from '../../../../../shared/lineage-discovery-types'
+import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { LineageOriginBadge } from '../lineage-origin-badge'
 import { AddManualPullRequest } from '../lineage-members/AddManualPullRequest'
 import { RemoveManualPullRequestButton } from '../lineage-members/RemoveManualPullRequestButton'
+import {
+  LineagePullRequestRow as SharedLineagePullRequestRow,
+  lineagePullRequestLabel as pullRequestLabel,
+  lineagePullRequestNumberLabel as pullRequestNumberLabel
+} from '../lineage-members/LineagePullRequestRow'
+import { useLineageMemberWorktreeResolver } from '../lineage-members/use-lineage-member-worktree'
 import { ChecksPanelTargetProvider } from './checks-panel-target-worktree'
-import { translate } from '@/i18n/i18n'
 
 type LineageChecksSectionsProps = {
   members: LineageMember[]
@@ -57,14 +55,6 @@ function groupByRepo(
   return [...groups.values()]
 }
 
-function pullRequestNumberLabel(pr: LineageMemberPullRequest): string {
-  return pr.provider === 'gitlab' ? `!${pr.number}` : `#${pr.number}`
-}
-
-function pullRequestLabel(member: LineageMember): string {
-  return member.pr ? `${member.repoName}${pullRequestNumberLabel(member.pr)}` : member.repoName
-}
-
 function ManualRemoveButton({
   member,
   actions
@@ -92,41 +82,12 @@ function LineagePullRequestRow({
   member: LineageMember
   actions?: ManualLinkActions
 }): React.JSX.Element {
-  const label = pullRequestLabel(member)
-  const url = member.pr?.url
   return (
-    <div
-      className="flex min-w-0 items-center gap-1.5 px-3 py-1.5 text-xs"
-      data-testid={`lineage-checks-pr-row-${member.repoName}-${member.pr?.number ?? member.branch}`}
-    >
-      <FolderGit2 className="size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate text-foreground" title={label}>
-        {member.pr?.title ?? label}
-      </span>
-      <LineageOriginBadge matchedBy={member.matchedBy} reasons={member.reasons} />
-      <div className="flex-1" />
-      <ManualRemoveButton member={member} actions={actions} />
-      {url ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={translate(
-            'auto.components.rightSidebar.lineageChecks.openLabel',
-            'Open {{label}}',
-            { label }
-          )}
-          title={translate(
-            'auto.components.rightSidebar.lineageChecks.openLabel',
-            'Open {{label}}',
-            { label }
-          )}
-          onClick={() => openHttpLink(url)}
-        >
-          <ExternalLink className="size-3.5" />
-        </Button>
-      ) : null}
-    </div>
+    <SharedLineagePullRequestRow
+      member={member}
+      testId={`lineage-checks-pr-row-${member.repoName}-${member.pr?.number ?? member.branch}`}
+      trailing={<ManualRemoveButton member={member} actions={actions} />}
+    />
   )
 }
 
@@ -219,23 +180,10 @@ export function LineageChecksSections({
   parentWorkspaceKey,
   onMembersChanged
 }: LineageChecksSectionsProps): React.JSX.Element {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const allWorktrees = useAllWorktrees()
+  const resolveWorktree = useLineageMemberWorktreeResolver()
   const [openByRepo, setOpenByRepo] = useState<Record<string, boolean>>({})
 
-  const groups = useMemo(
-    () =>
-      groupByRepo(members, (member) => {
-        const byId = member.worktreeId
-          ? findWorktreeById(worktreesByRepo, member.worktreeId)
-          : undefined
-        const byPath = member.worktreePath
-          ? allWorktrees.find((worktree) => worktree.path === member.worktreePath)
-          : undefined
-        return byId ?? byPath ?? null
-      }),
-    [allWorktrees, members, worktreesByRepo]
-  )
+  const groups = useMemo(() => groupByRepo(members, resolveWorktree), [members, resolveWorktree])
   const actions: ManualLinkActions | undefined = parentWorkspaceKey
     ? { parentWorkspaceKey, onChanged: onMembersChanged ?? (() => {}) }
     : undefined

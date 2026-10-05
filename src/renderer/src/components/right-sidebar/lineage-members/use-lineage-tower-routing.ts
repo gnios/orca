@@ -2,11 +2,13 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { useLineageMembers } from './use-lineage-members'
 import { hasMembersBeyondTower } from './lineage-tower-members'
+import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
 
 export type LineageTowerRouting = {
   towerKey: string | null
   /** True only once the host answered and resolved members beyond the tower itself. */
   showLineage: boolean
+  members: LineageMember[]
 }
 
 /** invariant: Source Control, Checks and the tab rule route on the same resolved members from main. */
@@ -19,5 +21,5 @@ export function useLineageTowerRouting(enabled = true): LineageTowerRouting {
   const { members, supported } = useLineageMembers(towerKey)
   const showLineage =
     supported && hasMembersBeyondTower(members, { id: activeWorktreeId, path: activeWorktreePath })
-  return { towerKey, showLineage }
+  return { towerKey, showLineage, members }
 }

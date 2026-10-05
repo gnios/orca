@@ -1,0 +1,162 @@
+import React, { useMemo, useState } from 'react'
+import { ChevronDown, FolderGit2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import type { LineageMember } from '../../../../../../shared/lineage-discovery-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { LineageOriginBadge } from '../../lineage-origin-badge'
+import {
+  LineagePullRequestRow,
+  lineagePullRequestLabel
+} from '../../lineage-members/LineagePullRequestRow'
+import { useLineageMemberWorktreeResolver } from '../../lineage-members/use-lineage-member-worktree'
+import { SourceControlTargetProvider } from '../panel/source-control-target-worktree'
+import { translate } from '@/i18n/i18n'
+
+type LineageSourceControlSectionsProps = {
+  members: LineageMember[]
+  /** The original single-worktree Source Control panel, rendered once per member worktree. */
+  PanelComponent: React.ComponentType
+}
+
+type MemberEntry = { key: string; member: LineageMember; worktree: Worktree | null }
+
+function rowKey(member: LineageMember): string {
+  return member.manualLinkId ?? `${member.repoName}:${member.branch}:${member.pr?.number ?? ''}`
+}
+
+function LineageSourceControlSection({
+  member,
+  worktree,
+  isOpen,
+  onOpenChange,
+  PanelComponent
+}: {
+  member: LineageMember
+  worktree: Worktree
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  PanelComponent: React.ComponentType
+}): React.JSX.Element {
+  const tabVisible = useAppStore(
+    (s) => s.rightSidebarOpen && s.rightSidebarTab === 'source-control'
+  )
+  return (
+    <Collapsible
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      className="flex flex-col"
+      data-testid={`lineage-source-control-section-${worktree.id}`}
+    >
+      <div className="flex items-center pl-1 pr-3 pt-1.5 pb-1">
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="min-w-0 flex-1 justify-start text-left"
+          >
+            <span className="flex min-w-0 flex-1 items-center gap-x-1.5 font-semibold">
+              <ChevronDown
+                className={cn(
+                  'size-3.5 shrink-0 text-muted-foreground transition-transform',
+                  !isOpen && '-rotate-90'
+                )}
+              />
+              <FolderGit2 className="size-4 shrink-0 text-primary" />
+              <span className="truncate text-xs font-semibold" title={member.repoName}>
+                {member.repoName}
+              </span>
+              {member.branch ? (
+                <span
+                  className="truncate text-[11px] font-normal text-muted-foreground"
+                  title={member.branch}
+                >
+                  {member.branch}
+                </span>
+              ) : null}
+              <LineageOriginBadge matchedBy={member.matchedBy} reasons={member.reasons} />
+              {member.unverifiable ? (
+                <span className="shrink-0 text-[11px] font-normal text-muted-foreground">
+                  {translate(
+                    'auto.components.rightSidebar.lineageSourceControl.unverifiable',
+                    'unverifiable'
+                  )}
+                </span>
+              ) : null}
+            </span>
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      {/* invariant: Radix unmounts closed content, so a collapsed section runs no git status, compare or review polling */}
+      <CollapsibleContent className="flex flex-col">
+        <SourceControlTargetProvider worktree={worktree} isActive={isOpen && tabVisible}>
+          <PanelComponent />
+        </SourceControlTargetProvider>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/** One collapsible original Source Control panel per member worktree the tower opened. */
+export function LineageSourceControlSections({
+  members,
+  PanelComponent
+}: LineageSourceControlSectionsProps): React.JSX.Element {
+  const resolveWorktree = useLineageMemberWorktreeResolver()
+  const [openByKey, setOpenByKey] = useState<Record<string, boolean>>({})
+
+  const entries = useMemo(() => {
+    const seen = new Set<string>()
+    const resolved: MemberEntry[] = []
+    // invariant: the tower's own worktree is always the first section; the rest keep member order
+    const ordered = [...members].sort(
+      (a, b) => Number(Boolean(b.isTower)) - Number(Boolean(a.isTower))
+    )
+    for (const member of ordered) {
+      const worktree = resolveWorktree(member)
+      const key = worktree ? worktree.id : rowKey(member)
+      // why: lineage and pattern discovery can both report one worktree; it gets one section
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      resolved.push({ key, member, worktree })
+    }
+    return resolved
+  }, [members, resolveWorktree])
+  const firstSectionKey = entries.find((entry) => entry.worktree !== null)?.key
+
+  return (
+    <TooltipProvider>
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek"
+        data-testid="lineage-source-control-sections"
+      >
+        <div className="flex flex-col divide-y divide-border/40">
+          {entries.map(({ key, member, worktree }) =>
+            worktree ? (
+              <LineageSourceControlSection
+                key={key}
+                member={member}
+                worktree={worktree}
+                isOpen={openByKey[key] ?? key === firstSectionKey}
+                onOpenChange={(open) => setOpenByKey((current) => ({ ...current, [key]: open }))}
+                PanelComponent={PanelComponent}
+              />
+            ) : (
+              <LineagePullRequestRow
+                key={key}
+                member={member}
+                testId={`lineage-source-control-pr-row-${member.manualLinkId ?? lineagePullRequestLabel(member)}`}
+              />
+            )
+          )}
+        </div>
+      </div>
+    </TooltipProvider>
+  )
+}

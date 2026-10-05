@@ -1,19 +1,26 @@
 import { translate } from '@/i18n/i18n'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
-import { LineageSourceControl } from '../lineage/LineageSourceControl'
+import { LineageSourceControlSections } from '../lineage/LineageSourceControlSections'
 import { useLineageTowerRouting } from '../../lineage-members/use-lineage-tower-routing'
 
-/** Resolves the panel model and guards the two states that have no source control to show. */
+/** Routes a tower with members to one original panel per member; everything else gets the single panel. */
 export function SourceControlPanel() {
-  const model = useSourceControlPanelModel()
-  const { activeRepo, activeWorktree, isFolder, worktreePath } = model
-  const { towerKey, showLineage } = useLineageTowerRouting()
+  const { showLineage, members } = useLineageTowerRouting()
 
   // why: until members load (or on hosts without lineage) the standard panel renders, so there is no flash
-  if (showLineage && towerKey) {
-    return <LineageSourceControl parentWorkspaceKey={towerKey} />
+  if (showLineage) {
+    return (
+      <LineageSourceControlSections members={members} PanelComponent={SingleSourceControlPanel} />
+    )
   }
+  return <SingleSourceControlPanel />
+}
+
+/** Resolves the panel model and guards the two states that have no source control to show. */
+export function SingleSourceControlPanel() {
+  const model = useSourceControlPanelModel()
+  const { activeRepo, activeWorktree, isFolder, worktreePath } = model
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
