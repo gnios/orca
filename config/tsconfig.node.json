@@ -15,7 +15,7 @@
     "../src/shared/**/*",
     "../src/relay/**/*",
     "../src/types/**/*",
-    "../packages/**/*"
+    "../packages/main/**/*"
   ],
   "compilerOptions": {
     "composite": true,

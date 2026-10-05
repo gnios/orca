@@ -23,7 +23,13 @@ describe('ProjectSourceControlScope', () => {
   let container: HTMLDivElement
   let root: Root
   let gitApi: Record<
-    'stageAll' | 'unstageAll' | 'discardAll' | 'lineageCommitProject',
+    | 'bulkStage'
+    | 'bulkUnstage'
+    | 'bulkDiscard'
+    | 'stage'
+    | 'unstage'
+    | 'discard'
+    | 'lineageCommitProject',
     ReturnType<typeof vi.fn>
   >
 
@@ -33,11 +39,14 @@ describe('ProjectSourceControlScope', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
-    // Mock window.api and window.electron
+    // why: mocks mirror the real preload git API names (src/preload/api/git-operation-api.ts)
     gitApi = {
-      stageAll: vi.fn().mockResolvedValue(undefined),
-      unstageAll: vi.fn().mockResolvedValue(undefined),
-      discardAll: vi.fn().mockResolvedValue(undefined),
+      bulkStage: vi.fn().mockResolvedValue(undefined),
+      bulkUnstage: vi.fn().mockResolvedValue(undefined),
+      bulkDiscard: vi.fn().mockResolvedValue(undefined),
+      stage: vi.fn().mockResolvedValue(undefined),
+      unstage: vi.fn().mockResolvedValue(undefined),
+      discard: vi.fn().mockResolvedValue(undefined),
       lineageCommitProject: vi
         .fn()
         .mockResolvedValue({ status: 200, success: true, commitHash: 'abc1234' })
@@ -84,12 +93,21 @@ describe('ProjectSourceControlScope', () => {
     expect(discardAllBtn).not.toBeNull()
     expect(refreshBtn).not.toBeNull()
 
-    // Clicking stage all calls git.stageAll for this project's worktreePath
+    // invariant: Stage All touches only the Changes section's files, in this worktree
     await act(async () => {
       stageAllBtn?.click()
     })
-    expect(gitApi.stageAll).toHaveBeenCalledWith({
-      worktreePath: '/workspaces/billing-service/feat-checkout'
+    expect(gitApi.bulkStage).toHaveBeenCalledWith({
+      worktreePath: '/workspaces/billing-service/feat-checkout',
+      filePaths: ['src/receipt.ts']
+    })
+
+    await act(async () => {
+      unstageAllBtn?.click()
+    })
+    expect(gitApi.bulkUnstage).toHaveBeenCalledWith({
+      worktreePath: '/workspaces/billing-service/feat-checkout',
+      filePaths: ['src/checkout.ts']
     })
 
     // Clicking refresh triggers onRefresh callback
@@ -203,7 +221,7 @@ describe('ProjectSourceControlScope', () => {
 
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
     const commitBtn = container.querySelector<HTMLButtonElement>(
-      '[data-testid="commit-button-billing-service"]'
+      '[data-testid="commit-button-wt-billing-primary"]'
     )
 
     // Button disabled when empty
@@ -230,5 +248,115 @@ describe('ProjectSourceControlScope', () => {
     // Commit draft is cleared on success
     expect(textarea.value).toBe('')
     expect(onRefresh).toHaveBeenCalled()
+  })
+
+  describe('a repository with two worktrees', () => {
+    const twoWorktrees: LineageProjectStatus = {
+      repoName: 'loan-core',
+      worktrees: [
+        {
+          worktreeId: 'r1::/w/one',
+          worktreePath: '/w/one',
+          branch: 'feat-one',
+          dirtyFiles: [{ path: 'one.ts', status: 'modified', area: 'unstaged' }]
+        },
+        {
+          worktreeId: 'r1::/w/two',
+          worktreePath: '/w/two',
+          branch: 'feat-two',
+          dirtyFiles: [
+            { path: 'two.ts', status: 'modified', area: 'unstaged' },
+            { path: 'new.ts', status: 'untracked', area: 'untracked' }
+          ]
+        }
+      ]
+    }
+
+    const scopeOf = (id: string): HTMLElement => {
+      const el = container.querySelector<HTMLElement>(`[data-testid="worktree-scope-${id}"]`)
+      if (!el) {
+        throw new Error(`scope ${id} missing`)
+      }
+      return el
+    }
+
+    it('renders one sub-scope with its own branch header and commit box per worktree', async () => {
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={twoWorktrees} />)
+      })
+      expect(scopeOf('r1::/w/one').textContent).toContain('feat-one')
+      expect(scopeOf('r1::/w/two').textContent).toContain('feat-two')
+      expect(container.querySelectorAll('textarea')).toHaveLength(2)
+    })
+
+    it('discards a file of worktree #2 in worktree #2', async () => {
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={twoWorktrees} />)
+      })
+      const discard = scopeOf('r1::/w/two').querySelector<HTMLButtonElement>(
+        '[data-testid="file-row-two.ts"] button[aria-label="Discard changes"]'
+      )
+      expect(discard).not.toBeNull()
+      await act(async () => {
+        discard?.click()
+      })
+      expect(gitApi.discard).toHaveBeenCalledWith({ worktreePath: '/w/two', filePath: 'two.ts' })
+    })
+
+    it('Discard All in Untracked discards only untracked files of that worktree', async () => {
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={twoWorktrees} />)
+      })
+      const buttons = scopeOf('r1::/w/two').querySelectorAll<HTMLButtonElement>(
+        'button[aria-label="Discard All"]'
+      )
+      expect(buttons).toHaveLength(2)
+      await act(async () => {
+        buttons[1].click()
+      })
+      expect(gitApi.bulkDiscard).toHaveBeenCalledWith({
+        worktreePath: '/w/two',
+        filePaths: ['new.ts']
+      })
+    })
+
+    it('commits worktree #2 to its own path', async () => {
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={twoWorktrees} />)
+      })
+      const scope = scopeOf('r1::/w/two')
+      const textarea = scope.querySelector('textarea')
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: 'feat: two' } })
+      })
+      await act(async () => {
+        scope.querySelector<HTMLButtonElement>('[data-testid="commit-button-r1::/w/two"]')?.click()
+      })
+      expect(gitApi.lineageCommitProject).toHaveBeenCalledWith({
+        worktreePath: '/w/two',
+        message: 'feat: two'
+      })
+      expect(scopeOf('r1::/w/one').querySelector('textarea')?.value).toBe('')
+    })
+
+    it('shows unverifiable and no actions for a remote worktree', async () => {
+      const remote: LineageProjectStatus = {
+        repoName: 'api',
+        worktrees: [
+          {
+            worktreeId: 'remote::/r/api',
+            worktreePath: '/r/api',
+            branch: 'feat',
+            dirtyFiles: [],
+            unverifiable: true
+          }
+        ]
+      }
+      await act(async () => {
+        root.render(<ProjectSourceControlScope project={remote} />)
+      })
+      expect(container.querySelector('[data-testid="worktree-unverifiable"]')).not.toBeNull()
+      expect(container.querySelector('textarea')).toBeNull()
+    })
   })
 })

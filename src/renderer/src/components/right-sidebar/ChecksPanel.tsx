@@ -47,7 +47,7 @@ import {
   ManualPullRequestEntryContext,
   ManualPullRequestMenuItem
 } from './checks-panel/ManualPullRequestEntry'
-import { hasMembersBeyondTower } from './checks-panel/checks-panel-tower-members'
+import { hasMembersBeyondTower } from './lineage-members/lineage-tower-members'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview

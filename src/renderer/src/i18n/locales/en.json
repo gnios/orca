@@ -16931,7 +16931,11 @@
           "discardAll": "Discard All",
           "stageAll": "Stage All",
           "untrackedFiles": "Untracked Files",
-          "repoClean": "No changes in this repository"
+          "worktreeClean": "No changes in this worktree",
+          "unverifiable": "unverifiable",
+          "discardAllTitle": "Discard {{count}} files on {{branch}}?",
+          "discardAllDescription": "This cannot be undone.",
+          "discardAllConfirm": "Discard"
         }
       },
       "link": {

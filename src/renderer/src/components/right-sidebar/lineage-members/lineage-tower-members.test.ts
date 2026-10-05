@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
-import { hasMembersBeyondTower } from './checks-panel-tower-members'
+import { hasMembersBeyondTower } from './lineage-tower-members'
 
 const child: LineageMember = {
   repoName: 'api',

@@ -75,31 +75,15 @@ export function LineageSourceControl({
   const refreshAll = useCallback(() => fetchStatus(true), [fetchStatus])
   const refreshQuiet = useCallback(() => fetchStatus(), [fetchStatus])
 
+  // invariant: sections with changes start open via the `?? dirtyCount > 0` default, so initialData needs no state sync
   useEffect(() => {
     if (!initialData) {
       void fetchStatus()
-    } else {
-      const initialOpen: Record<string, boolean> = {}
-      if (initialData.projects) {
-        for (const [repoName, proj] of Object.entries(initialData.projects)) {
-          const hasChanges =
-            (proj.totalDirtyFiles ?? 0) > 0 ||
-            proj.worktrees.some((w) => w.dirtyFiles && w.dirtyFiles.length > 0)
-          if (hasChanges) {
-            initialOpen[repoName] = true
-          }
-        }
-      }
-      setOpenProjects(initialOpen)
-      setLoading(false)
     }
   }, [fetchStatus, initialData])
 
-  const toggleProject = (repoName: string) => {
-    setOpenProjects((prev) => ({
-      ...prev,
-      [repoName]: !prev[repoName]
-    }))
+  const toggleProject = (repoName: string, wasOpen: boolean) => {
+    setOpenProjects((prev) => ({ ...prev, [repoName]: !wasOpen }))
   }
 
   const { projectList, overallDirtyFiles } = useMemo(() => {
@@ -233,8 +217,8 @@ export function LineageSourceControl({
                       type="button"
                       variant="ghost"
                       size="xs"
-                      className="h-auto min-h-7 min-w-0 flex-1 justify-start gap-x-1.5 py-1 text-left font-semibold tracking-wide text-foreground group-hover/section:text-accent-foreground"
-                      onClick={() => toggleProject(repoName)}
+                      className="h-auto min-h-7 min-w-0 flex-1 justify-start text-left"
+                      onClick={() => toggleProject(repoName, isOpen)}
                       aria-expanded={isOpen}
                       data-testid={`accordion-trigger-${repoName}`}
                     >
