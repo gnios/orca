@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,6 +42,11 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { useLineageMembers } from './lineage-members/use-lineage-members'
 import { LineageChecksSections } from './checks-panel/LineageChecksSections'
+import {
+  ManualPullRequestDialog,
+  ManualPullRequestEntryContext,
+  ManualPullRequestMenuItem
+} from './checks-panel/ManualPullRequestEntry'
 import { hasMembersBeyondTower } from './checks-panel/checks-panel-tower-members'
 
 type ChecksPanelReviewHeaderProps = {
@@ -65,6 +70,7 @@ export function ChecksPanelReviewHeader({
   onUnlinkReview,
   onLinkAnotherReview
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
@@ -146,8 +152,10 @@ export function ChecksPanelReviewHeader({
                   'Link another PR'
                 )}
           </DropdownMenuItem>
+          <ManualPullRequestMenuItem onOpen={() => setLinkDialogOpen(true)} />
         </DropdownMenuContent>
       </DropdownMenu>
+      <ManualPullRequestDialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />
     </div>
   )
 }
@@ -201,6 +209,13 @@ export default function ChecksPanel(): React.JSX.Element {
   const activeWorktreePath = useActiveWorktree()?.path ?? null
   const { members, supported, refresh } = useLineageMembers(towerKey)
   const active = { id: activeWorktreeId, path: activeWorktreePath }
+  const entry = useMemo(
+    () =>
+      supported && towerKey
+        ? { parentWorkspaceKey: towerKey, onChanged: () => void refresh() }
+        : null,
+    [supported, towerKey, refresh]
+  )
   if (supported && hasMembersBeyondTower(members, active)) {
     return (
       <LineageChecksSections
@@ -211,5 +226,9 @@ export default function ChecksPanel(): React.JSX.Element {
       />
     )
   }
-  return <SingleWorktreeChecksPanel />
+  return (
+    <ManualPullRequestEntryContext.Provider value={entry}>
+      <SingleWorktreeChecksPanel />
+    </ManualPullRequestEntryContext.Provider>
+  )
 }
