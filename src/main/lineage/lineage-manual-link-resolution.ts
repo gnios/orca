@@ -109,7 +109,10 @@ export async function resolveManualLinkMembers(
       }
       const worktree = findWorktree(link, await scanFor(repo))
       if (!worktree) {
-        return member
+        // why: a removed worktree keeps its path (no id) only so its compact row can name the folder
+        return lineageManualLinkKind(link) === 'worktree' && link.worktreePath
+          ? { ...member, worktreePath: link.worktreePath }
+          : member
       }
       return {
         ...member,

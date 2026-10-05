@@ -54,7 +54,13 @@ export function isLineageManualLink(value: unknown): value is LineageManualLink 
   }
 }
 
-/** invariant: one link per kind + repo + target; repo names compare case-insensitively like the add path. */
+/** Drops trailing path separators so `/w/a/` and `/w/a` name one worktree; a bare root is kept. */
+export function normalizeLineageWorktreePath(worktreePath: string): string {
+  const trimmed = worktreePath.replace(/[\\/]+$/, '')
+  return trimmed === '' || /^[A-Za-z]:$/.test(trimmed) ? worktreePath : trimmed
+}
+
+/** invariant: one link per kind + repo + target; repo is its id, or its name (case-insensitive) for links saved before ids. */
 export function lineageManualLinkDedupeKey(link: LineageManualLink): string {
   const kind = lineageManualLinkKind(link)
   const target =
@@ -62,8 +68,9 @@ export function lineageManualLinkDedupeKey(link: LineageManualLink): string {
       ? String(link.number)
       : kind === 'branch'
         ? (link.branch ?? '')
-        : (link.worktreePath ?? '')
-  return `${kind}\u0000${link.repoName.toLowerCase()}\u0000${target}`
+        : normalizeLineageWorktreePath(link.worktreePath ?? '')
+  const repo = link.repoId ? `id:${link.repoId}` : `name:${link.repoName.toLowerCase()}`
+  return `${kind}\u0000${repo}\u0000${target}`
 }
 
 /** Keeps the first link for each dedupe key and each id. */

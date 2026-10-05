@@ -33,6 +33,7 @@ import { createLineagePatternScanCache } from '../lineage/lineage-pattern-scan-c
 import { addLineageManualLink, removeLineageManualLink } from '../lineage/lineage-manual-links'
 import { testLineagePattern } from '../lineage/lineage-pattern-test'
 import { lookupLineagePullRequestHeadBranch } from '../lineage/lineage-pr-head-branch'
+import { listRepoWorktrees } from '../lineage/lineage-name-pattern-discovery'
 
 export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   const patternScanCache = createLineagePatternScanCache()
@@ -90,7 +91,8 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
     async (_event, args: LineageAddManualLinkArgs): Promise<LineageAddManualLinkResult> => {
       patternScanCache.clear()
       return addLineageManualLink(store, args, {
-        lookupPullRequestHeadBranch: lookupLineagePullRequestHeadBranch
+        lookupPullRequestHeadBranch: lookupLineagePullRequestHeadBranch,
+        listRepoWorktrees: (repo) => listRepoWorktrees(repo, { patternScanCache })
       })
     }
   )

@@ -6,11 +6,19 @@ import type {
   LineageRemoveManualLinkResult
 } from '../../shared/fleet-lineage-types'
 import type { LineageManualLink } from '../../shared/lineage-discovery-types'
-import { lineageManualLinkDedupeKey } from '../../shared/lineage-manual-link-shape'
-import { parsePullRequestReference } from '../../shared/lineage-pr-reference'
+import {
+  lineageManualLinkDedupeKey,
+  normalizeLineageWorktreePath
+} from '../../shared/lineage-manual-link-shape'
+import {
+  parsePullRequestReference,
+  type ParsedPullRequestReference
+} from '../../shared/lineage-pr-reference'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
-import type { PatternRepo } from './lineage-name-pattern-discovery'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { listRepoWorktrees, type PatternRepo } from './lineage-name-pattern-discovery'
+import type { LineagePullRequestLookup } from './lineage-pr-head-branch'
 import type { LineageStoreContract } from './workspace-lineage-service'
 
 const MAX_REFERENCE_LENGTH = 2048
@@ -21,13 +29,18 @@ export type LineageManualLinkDeps = {
   /** Best effort; null, '' or a throw leave the link without a branch. */
   lookupPullRequestHeadBranch?: (
     repo: PatternRepo,
-    number: number,
-    provider: 'github' | 'gitlab' | undefined
+    pr: LineagePullRequestLookup
   ) => Promise<string | null>
+  /** The repo's worktrees as git lists them; a local worktree link must name one of them. */
+  listRepoWorktrees?: (repo: PatternRepo) => Promise<GitWorktreeInfo[]>
 }
 
 type Failure = { success: false; error: string }
-type Draft = { link: Omit<LineageManualLink, 'id' | 'addedAt'>; repo: PatternRepo }
+type Draft = {
+  link: Omit<LineageManualLink, 'id' | 'addedAt'>
+  repo: PatternRepo
+  pr?: ParsedPullRequestReference
+}
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= maxLength
@@ -61,6 +74,7 @@ function draftPullRequest(store: LineageStoreContract, reference: unknown): Draf
   }
   return {
     repo,
+    pr: parsed,
     link: {
       kind: 'pr',
       repoName: repo.displayName,
@@ -85,7 +99,11 @@ function findGitRepo(store: LineageStoreContract, repoId: unknown): PatternRepo 
   return repo
 }
 
-function draftTarget(store: LineageStoreContract, rawTarget: unknown): Draft | Failure {
+async function draftTarget(
+  store: LineageStoreContract,
+  rawTarget: unknown,
+  deps: LineageManualLinkDeps
+): Promise<Draft | Failure> {
   const target = readRecord(rawTarget)
   if (!target) {
     return fail('Invalid target')
@@ -110,13 +128,25 @@ function draftTarget(store: LineageStoreContract, rawTarget: unknown): Draft | F
     if ('success' in repo) {
       return repo
     }
-    const worktreePath = target.worktreePath
+    const rawPath = target.worktreePath
     // why: an SSH worktree path is POSIX on the remote host even when this host is Windows
     if (
-      !isNonEmptyString(worktreePath, MAX_PATH_LENGTH) ||
-      !(path.posix.isAbsolute(worktreePath) || path.win32.isAbsolute(worktreePath))
+      !isNonEmptyString(rawPath, MAX_PATH_LENGTH) ||
+      !(path.posix.isAbsolute(rawPath) || path.win32.isAbsolute(rawPath))
     ) {
       return fail('Invalid worktree path')
+    }
+    let worktreePath = normalizeLineageWorktreePath(rawPath)
+    // hazard: an SSH worktree lives on its host; it is stored as named, never checked against local git
+    if (!repo.connectionId) {
+      const listed = await (deps.listRepoWorktrees ?? listRepoWorktrees)(repo)
+      const match = listed.find(
+        (worktree) => !worktree.isBare && path.resolve(worktree.path) === path.resolve(rawPath)
+      )
+      if (!match) {
+        return fail('Worktree is not part of this repository')
+      }
+      worktreePath = match.path
     }
     return {
       repo,
@@ -137,9 +167,19 @@ function findDuplicate(
   parentWorkspaceKey: string,
   link: Omit<LineageManualLink, 'id' | 'addedAt'>
 ): LineageManualLink | undefined {
-  const key = lineageManualLinkDedupeKey({ ...link, id: '', addedAt: 0 })
+  const repos = store.getRepos?.() ?? []
+  // why: links saved before repo ids carry only a name; key them by the repo that name registers today
+  const withRepoId = (candidate: Omit<LineageManualLink, 'id' | 'addedAt'>): LineageManualLink => ({
+    ...candidate,
+    id: '',
+    addedAt: 0,
+    repoId:
+      candidate.repoId ??
+      repos.find((repo) => repo.displayName.toLowerCase() === candidate.repoName.toLowerCase())?.id
+  })
+  const key = lineageManualLinkDedupeKey(withRepoId(link))
   return (store.getLineageManualLinks?.(parentWorkspaceKey) ?? []).find(
-    (existing) => lineageManualLinkDedupeKey(existing) === key
+    (existing) => lineageManualLinkDedupeKey(withRepoId(existing)) === key
   )
 }
 
@@ -147,14 +187,18 @@ async function lookupBranch(
   deps: LineageManualLinkDeps,
   draft: Draft
 ): Promise<string | undefined> {
-  if (draft.link.kind !== 'pr' || draft.link.number === undefined) {
+  if (!draft.pr) {
     return undefined
   }
   try {
-    const provider = draft.link.url
-      ? parsePullRequestReference(draft.link.url)?.provider
-      : undefined
-    const branch = await deps.lookupPullRequestHeadBranch?.(draft.repo, draft.link.number, provider)
+    const { repoName, number, provider, owner, host } = draft.pr
+    const branch = await deps.lookupPullRequestHeadBranch?.(draft.repo, {
+      repoName,
+      number,
+      ...(provider ? { provider } : {}),
+      ...(owner ? { owner } : {}),
+      ...(host ? { host } : {})
+    })
     return typeof branch === 'string' && branch.length > 0 ? branch : undefined
   } catch {
     // why: the head branch only helps match a local worktree; a failed lookup never fails the add
@@ -169,14 +213,17 @@ export async function addLineageManualLink(
 ): Promise<LineageAddManualLinkResult> {
   // hazard: IPC payloads are untrusted at runtime despite the static types
   const raw = readRecord(args)
-  if (!raw || !isNonEmptyString(raw.parentWorkspaceKey, MAX_REFERENCE_LENGTH)) {
-    return fail('Invalid pull request reference')
+  if (!raw) {
+    return fail('Invalid request')
+  }
+  if (!isNonEmptyString(raw.parentWorkspaceKey, MAX_REFERENCE_LENGTH)) {
+    return fail('Invalid parent workspace key')
   }
   const parentWorkspaceKey = raw.parentWorkspaceKey
   const draft =
     raw.target === undefined
       ? draftPullRequest(store, raw.reference)
-      : draftTarget(store, raw.target)
+      : await draftTarget(store, raw.target, deps)
   if ('success' in draft) {
     return draft
   }

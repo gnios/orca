@@ -507,3 +507,34 @@ describe('manual links resolve to local worktrees', () => {
     expect(seen).toEqual([])
   })
 })
+
+describe('manual worktree link whose worktree is gone', () => {
+  it('keeps the named path (no worktree id) so the row can label it', async () => {
+    const links: ManualPullRequestLink[] = [
+      {
+        id: 'w',
+        kind: 'worktree',
+        repoName: 'loan-core',
+        repoId: 'r1',
+        worktreePath: '/repos/loan-core-wt/removed',
+        worktreeId: 'r1::/repos/loan-core-wt/removed',
+        addedAt: 1
+      }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos, links, settings: { patternEnabled: false } }),
+      PARENT,
+      { listWorktreesFn: async () => [] }
+    )
+    expect(members).toEqual([
+      {
+        repoName: 'loan-core',
+        branch: '',
+        worktreePath: '/repos/loan-core-wt/removed',
+        matchedBy: 'manual',
+        manualLinkId: 'w',
+        reasons: ['added manually']
+      }
+    ])
+  })
+})

@@ -7,7 +7,9 @@ describe('parsePullRequestReference', () => {
       repoName: 'loan-core',
       number: 12,
       url: 'https://github.com/neon/loan-core/pull/12',
-      provider: 'github'
+      provider: 'github',
+      owner: 'neon',
+      host: 'github.com'
     })
   })
   it('parses a GitLab merge request URL', () => {
@@ -15,7 +17,9 @@ describe('parsePullRequestReference', () => {
       repoName: 'proj',
       number: 4,
       url: 'https://gitlab.com/g/sub/proj/-/merge_requests/4',
-      provider: 'gitlab'
+      provider: 'gitlab',
+      owner: 'g/sub',
+      host: 'gitlab.com'
     })
   })
   it('parses repo#number', () => {
