@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import React, { act } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
@@ -15,12 +15,16 @@ const mockStoreState = {
 }
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: any) => selector(mockStoreState)
+  useAppStore: (selector: (state: typeof mockStoreState) => unknown) => selector(mockStoreState)
 }))
 
 describe('ProjectSourceControlScope', () => {
   let container: HTMLDivElement
   let root: Root
+  let gitApi: Record<
+    'stageAll' | 'unstageAll' | 'discardAll' | 'lineageCommitProject',
+    ReturnType<typeof vi.fn>
+  >
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -29,14 +33,15 @@ describe('ProjectSourceControlScope', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     // Mock window.api and window.electron
-    ;(window as any).api = {
-      git: {
-        stageAll: vi.fn().mockResolvedValue(undefined),
-        unstageAll: vi.fn().mockResolvedValue(undefined),
-        discardAll: vi.fn().mockResolvedValue(undefined),
-        lineageCommitProject: vi.fn().mockResolvedValue({ status: 200, success: true, commitHash: 'abc1234' })
-      }
+    gitApi = {
+      stageAll: vi.fn().mockResolvedValue(undefined),
+      unstageAll: vi.fn().mockResolvedValue(undefined),
+      discardAll: vi.fn().mockResolvedValue(undefined),
+      lineageCommitProject: vi
+        .fn()
+        .mockResolvedValue({ status: 200, success: true, commitHash: 'abc1234' })
     }
+    Reflect.set(window, 'api', { git: gitApi })
   })
 
   afterEach(() => {
@@ -44,7 +49,7 @@ describe('ProjectSourceControlScope', () => {
       root.unmount()
     })
     container.remove()
-    delete (window as any).api
+    Reflect.deleteProperty(window, 'api')
   })
 
   const sampleProject: LineageProjectStatus = {
@@ -55,9 +60,9 @@ describe('ProjectSourceControlScope', () => {
         worktreePath: '/workspaces/billing-service/feat-checkout',
         branch: 'feat-checkout',
         dirtyFiles: [
-          { path: 'src/checkout.ts', status: 'M', area: 'staged' },
-          { path: 'src/receipt.ts', status: 'M', area: 'unstaged' }
-        ] as any
+          { path: 'src/checkout.ts', status: 'modified', area: 'staged' },
+          { path: 'src/receipt.ts', status: 'modified', area: 'unstaged' }
+        ]
       }
     ]
   }
@@ -65,12 +70,7 @@ describe('ProjectSourceControlScope', () => {
   it('renders dedicated stage buttons per project', async () => {
     const onRefresh = vi.fn()
     await act(async () => {
-      root.render(
-        <ProjectSourceControlScope
-          project={sampleProject}
-          onRefresh={onRefresh}
-        />
-      )
+      root.render(<ProjectSourceControlScope project={sampleProject} onRefresh={onRefresh} />)
     })
 
     const stageAllBtn = container.querySelector('button[aria-label="Stage All"]')
@@ -87,7 +87,7 @@ describe('ProjectSourceControlScope', () => {
     await act(async () => {
       ;(stageAllBtn as HTMLElement).click()
     })
-    expect((window as any).api.git.stageAll).toHaveBeenCalledWith({
+    expect(gitApi.stageAll).toHaveBeenCalledWith({
       worktreePath: '/workspaces/billing-service/feat-checkout'
     })
 
@@ -100,11 +100,7 @@ describe('ProjectSourceControlScope', () => {
 
   it('persists commit draft per project', async () => {
     await act(async () => {
-      root.render(
-        <ProjectSourceControlScope
-          project={sampleProject}
-        />
-      )
+      root.render(<ProjectSourceControlScope project={sampleProject} />)
     })
 
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement
@@ -125,11 +121,7 @@ describe('ProjectSourceControlScope', () => {
     // Re-mount component and verify draft is preserved
     root = createRoot(container)
     await act(async () => {
-      root.render(
-        <ProjectSourceControlScope
-          project={sampleProject}
-        />
-      )
+      root.render(<ProjectSourceControlScope project={sampleProject} />)
     })
 
     const restoredTextarea = container.querySelector('textarea') as HTMLTextAreaElement
@@ -139,16 +131,13 @@ describe('ProjectSourceControlScope', () => {
   it('dispatches commit only for target project', async () => {
     const onRefresh = vi.fn()
     await act(async () => {
-      root.render(
-        <ProjectSourceControlScope
-          project={sampleProject}
-          onRefresh={onRefresh}
-        />
-      )
+      root.render(<ProjectSourceControlScope project={sampleProject} onRefresh={onRefresh} />)
     })
 
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement
-    const commitBtn = container.querySelector('[data-testid="commit-button-billing-service"]') as HTMLButtonElement
+    const commitBtn = container.querySelector(
+      '[data-testid="commit-button-billing-service"]'
+    ) as HTMLButtonElement
 
     // Button disabled when empty
     expect(commitBtn.disabled).toBe(true)
@@ -166,7 +155,7 @@ describe('ProjectSourceControlScope', () => {
     })
 
     // Dispatches commit strictly to target project's worktreePath
-    expect((window as any).api.git.lineageCommitProject).toHaveBeenCalledWith({
+    expect(gitApi.lineageCommitProject).toHaveBeenCalledWith({
       worktreePath: '/workspaces/billing-service/feat-checkout',
       message: 'fix: correct currency formatting'
     })

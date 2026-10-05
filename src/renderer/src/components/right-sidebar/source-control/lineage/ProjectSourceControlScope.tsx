@@ -1,29 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import {
-  FolderGit2,
-  RefreshCw,
-  Plus,
-  Minus,
-  Trash2,
-  GitCommit,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FileCode
-} from 'lucide-react'
+import React, { useState, useCallback } from 'react'
+import { FolderGit2, RefreshCw, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitFileStatus, GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { LineageProjectStatus } from '../../../../../../shared/fleet-lineage-types'
 import {
   readCommitDraftForWorktree,
   writeCommitDraftForWorktree,
   type CommitDraftsByWorktree
 } from '../commit/commit-drafts'
+import { ActionButton } from '../listing/action-button'
+import { ProjectSourceControlSectionGroup } from './ProjectSourceControlSectionGroup'
 
-// In-memory module cache for commit drafts across worktrees to ensure draft persistence across unmounts
+// why: draft persistence across unmounts requires module-level cache across worktrees
 const globalLineageCommitDrafts: CommitDraftsByWorktree = {}
 
 export function resetLineageCommitDrafts(): void {
@@ -32,13 +22,75 @@ export function resetLineageCommitDrafts(): void {
   }
 }
 
-export interface ProjectSourceControlScopeProps {
+function normalizeGitStatus(status?: string): GitFileStatus {
+  switch (status) {
+    case 'M':
+    case 'modified':
+      return 'modified'
+    case 'A':
+    case 'added':
+      return 'added'
+    case 'D':
+    case 'deleted':
+      return 'deleted'
+    case 'R':
+    case 'renamed':
+      return 'renamed'
+    case 'U':
+    case 'untracked':
+      return 'untracked'
+    case 'C':
+    case 'copied':
+      return 'copied'
+    default:
+      return 'modified'
+  }
+}
+
+function normalizeGitArea(area?: string): 'staged' | 'unstaged' | 'untracked' {
+  if (area === 'staged') {
+    return 'staged'
+  }
+  if (area === 'untracked') {
+    return 'untracked'
+  }
+  return 'unstaged'
+}
+
+export type ProjectSourceControlScopeProps = {
   project: LineageProjectStatus & {
     worktreePath?: string
     totalDirtyFiles?: number
   }
   onRefresh?: () => void
   onOpenFileDiff?: (worktreeId: string, filePath: string, staged: boolean) => void
+}
+
+type ProjectGitApi = {
+  stageAll?: (args: { worktreePath: string }) => Promise<void>
+  bulkStage?: (args: { worktreePath: string; filePaths: string[] }) => Promise<void>
+  unstageAll?: (args: { worktreePath: string }) => Promise<void>
+  bulkUnstage?: (args: { worktreePath: string; filePaths: string[] }) => Promise<void>
+  discardAll?: (args: { worktreePath: string }) => Promise<void>
+  bulkDiscard?: (args: { worktreePath: string; filePaths: string[]; area: string }) => Promise<void>
+  stage?: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  unstage?: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  discard?: (args: { worktreePath: string; filePath: string; area: string }) => Promise<void>
+  lineageCommitProject?: (args: {
+    worktreePath: string
+    message: string
+  }) => Promise<{ status?: number; success?: boolean; error?: string }>
+}
+
+type WindowWithProjectGit = Window & {
+  api?: {
+    git?: ProjectGitApi
+  }
+  electron?: {
+    ipcRenderer?: {
+      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+    }
+  }
 }
 
 export function ProjectSourceControlScope({
@@ -48,22 +100,16 @@ export function ProjectSourceControlScope({
 }: ProjectSourceControlScopeProps): React.JSX.Element {
   const storeOpenDiff = useAppStore((s) => s.openDiff)
 
-  // Primary worktree for this project
   const primaryWorktree = project.worktrees[0]
   const worktreeId = primaryWorktree?.worktreeId ?? project.repoName
   const worktreePath = project.worktreePath ?? primaryWorktree?.worktreePath ?? ''
 
-  // Commit draft state persisted by worktreeId
   const [drafts, setDrafts] = useState<CommitDraftsByWorktree>(globalLineageCommitDrafts)
   const commitMessage = readCommitDraftForWorktree(drafts, worktreeId)
 
   const [isCommitting, setIsCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
   const [commitSuccess, setCommitSuccess] = useState(false)
-
-  // Section collapse state
-  const [isStagedOpen, setIsStagedOpen] = useState(true)
-  const [isChangesOpen, setIsChangesOpen] = useState(true)
 
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
@@ -72,26 +118,38 @@ export function ProjectSourceControlScope({
     setDrafts(next)
   }
 
-  // Combine dirty files across all child worktrees in this project
-  const allDirtyFiles: Array<{ worktreeId: string; entry: GitStatusEntry }> = []
+  const allDirtyFiles: { worktreeId: string; entry: GitStatusEntry }[] = []
   for (const wt of project.worktrees) {
     if (wt.dirtyFiles && Array.isArray(wt.dirtyFiles)) {
-      for (const f of wt.dirtyFiles) {
-        allDirtyFiles.push({ worktreeId: wt.worktreeId, entry: f as GitStatusEntry })
+      for (const item of wt.dirtyFiles) {
+        const rawStatus = typeof item === 'string' ? 'modified' : item.status
+        const rawArea = typeof item === 'string' ? 'unstaged' : item.area
+        const rawPath = typeof item === 'string' ? item : item.path
+
+        const entry: GitStatusEntry = {
+          path: rawPath,
+          status: normalizeGitStatus(rawStatus),
+          area: normalizeGitArea(rawArea)
+        }
+        allDirtyFiles.push({ worktreeId: wt.worktreeId, entry })
       }
     }
   }
 
   const stagedFiles = allDirtyFiles.filter((item) => item.entry.area === 'staged')
-  const unstagedFiles = allDirtyFiles.filter((item) => item.entry.area !== 'staged')
+  const unstagedFiles = allDirtyFiles.filter((item) => item.entry.area === 'unstaged')
+  const untrackedFiles = allDirtyFiles.filter((item) => item.entry.area === 'untracked')
 
-  // Actions
   const handleStageAll = async () => {
     try {
-      if ((window as any).api?.git?.stageAll) {
-        await (window as any).api.git.stageAll({ worktreePath })
-      } else if ((window as any).electron?.ipcRenderer?.invoke) {
-        await (window as any).electron.ipcRenderer.invoke('git:stageAll', { worktreePath })
+      const win = window as unknown as WindowWithProjectGit
+      const filePaths = unstagedFiles.map((f) => f.entry.path)
+      if (win.api?.git?.stageAll) {
+        await win.api.git.stageAll({ worktreePath })
+      } else if (win.api?.git?.bulkStage) {
+        await win.api.git.bulkStage({ worktreePath, filePaths })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:stageAll', { worktreePath })
       }
       onRefresh?.()
     } catch (e) {
@@ -101,10 +159,14 @@ export function ProjectSourceControlScope({
 
   const handleUnstageAll = async () => {
     try {
-      if ((window as any).api?.git?.unstageAll) {
-        await (window as any).api.git.unstageAll({ worktreePath })
-      } else if ((window as any).electron?.ipcRenderer?.invoke) {
-        await (window as any).electron.ipcRenderer.invoke('git:unstageAll', { worktreePath })
+      const win = window as unknown as WindowWithProjectGit
+      const filePaths = stagedFiles.map((f) => f.entry.path)
+      if (win.api?.git?.unstageAll) {
+        await win.api.git.unstageAll({ worktreePath })
+      } else if (win.api?.git?.bulkUnstage) {
+        await win.api.git.bulkUnstage({ worktreePath, filePaths })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:unstageAll', { worktreePath })
       }
       onRefresh?.()
     } catch (e) {
@@ -114,10 +176,14 @@ export function ProjectSourceControlScope({
 
   const handleDiscardAll = async () => {
     try {
-      if ((window as any).api?.git?.discardAll) {
-        await (window as any).api.git.discardAll({ worktreePath })
-      } else if ((window as any).electron?.ipcRenderer?.invoke) {
-        await (window as any).electron.ipcRenderer.invoke('git:discardAll', { worktreePath })
+      const win = window as unknown as WindowWithProjectGit
+      const filePaths = unstagedFiles.map((f) => f.entry.path)
+      if (win.api?.git?.discardAll) {
+        await win.api.git.discardAll({ worktreePath })
+      } else if (win.api?.git?.bulkDiscard) {
+        await win.api.git.bulkDiscard({ worktreePath, filePaths, area: 'unstaged' })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:discardAll', { worktreePath })
       }
       onRefresh?.()
     } catch (e) {
@@ -125,26 +191,83 @@ export function ProjectSourceControlScope({
     }
   }
 
+  const handleStagePath = async (filePath: string) => {
+    try {
+      const win = window as unknown as WindowWithProjectGit
+      if (win.api?.git?.stage) {
+        await win.api.git.stage({ worktreePath, filePath })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:stage', { worktreePath, filePath })
+      }
+      onRefresh?.()
+    } catch (e) {
+      console.error('Failed to stage file', e)
+    }
+  }
+
+  const handleUnstagePath = async (filePath: string) => {
+    try {
+      const win = window as unknown as WindowWithProjectGit
+      if (win.api?.git?.unstage) {
+        await win.api.git.unstage({ worktreePath, filePath })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:unstage', { worktreePath, filePath })
+      }
+      onRefresh?.()
+    } catch (e) {
+      console.error('Failed to unstage file', e)
+    }
+  }
+
+  const handleDiscardEntry = async (entry: GitStatusEntry) => {
+    try {
+      const win = window as unknown as WindowWithProjectGit
+      if (win.api?.git?.discard) {
+        await win.api.git.discard({ worktreePath, filePath: entry.path, area: entry.area })
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        await win.electron.ipcRenderer.invoke('git:discard', {
+          worktreePath,
+          filePath: entry.path,
+          area: entry.area
+        })
+      }
+      onRefresh?.()
+    } catch (e) {
+      console.error('Failed to discard file', e)
+    }
+  }
+
+  const handleRevealInExplorer = useCallback((targetWtId: string, absPath: string) => {
+    // why: optional explorer path reveal from store if supported
+    const reveal = useAppStore.getState().revealInExplorer
+    if (reveal) {
+      reveal(targetWtId, absPath)
+    }
+  }, [])
+
   const handleCommit = async () => {
     const trimmed = commitMessage.trim()
-    if (!trimmed) return
+    if (!trimmed) {
+      return
+    }
 
     setIsCommitting(true)
     setCommitError(null)
     setCommitSuccess(false)
 
     try {
-      let result: any
-      if ((window as any).api?.git?.lineageCommitProject) {
-        result = await (window as any).api.git.lineageCommitProject({
+      const win = window as unknown as WindowWithProjectGit
+      let result: { status?: number; success?: boolean; error?: string } | undefined
+      if (win.api?.git?.lineageCommitProject) {
+        result = await win.api.git.lineageCommitProject({
           worktreePath,
           message: trimmed
         })
-      } else if ((window as any).electron?.ipcRenderer?.invoke) {
-        result = await (window as any).electron.ipcRenderer.invoke('git:lineage-commit-project', {
+      } else if (win.electron?.ipcRenderer?.invoke) {
+        result = (await win.electron.ipcRenderer.invoke('git:lineage-commit-project', {
           worktreePath,
           message: trimmed
-        })
+        })) as { status?: number; success?: boolean; error?: string } | undefined
       }
 
       if (result && (result.status === 400 || result.status === 500 || result.success === false)) {
@@ -152,15 +275,14 @@ export function ProjectSourceControlScope({
         return
       }
 
-      // Success: clear commit draft for this worktree
       const next = writeCommitDraftForWorktree(drafts, worktreeId, '')
       globalLineageCommitDrafts[worktreeId] = ''
       setDrafts(next)
       setCommitSuccess(true)
       setTimeout(() => setCommitSuccess(false), 2000)
       onRefresh?.()
-    } catch (err: any) {
-      setCommitError(err?.message ?? 'Commit failed')
+    } catch (err: unknown) {
+      setCommitError(err instanceof Error ? err.message : 'Commit failed')
     } finally {
       setIsCommitting(false)
     }
@@ -177,206 +299,91 @@ export function ProjectSourceControlScope({
   }
 
   return (
-    <div
-      className="flex flex-col gap-3 p-3 bg-muted/20 border-t border-border/50 text-xs"
-      data-testid={`project-scope-${project.repoName}`}
-    >
-      {/* Project Action Header */}
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/30">
-        <div className="flex items-center gap-1.5 font-medium text-foreground truncate">
-          <FolderGit2 className="h-4 w-4 text-primary shrink-0" />
-          <span className="truncate">{project.repoName}</span>
-          {primaryWorktree?.branch && (
-            <span className="text-[11px] text-muted-foreground font-normal">
-              ({primaryWorktree.branch})
-            </span>
+    <TooltipProvider>
+      <div
+        className="flex flex-col border-t border-border/40 text-xs"
+        data-testid={`project-scope-${project.repoName}`}
+      >
+        <div className="flex items-center justify-between px-3 pt-2 pb-1 border-b border-border/20">
+          <div className="flex items-center gap-1.5 font-medium text-foreground truncate">
+            <FolderGit2 className="size-3.5 text-primary shrink-0" />
+            <span className="truncate">{project.repoName}</span>
+            {primaryWorktree?.branch && (
+              <span className="text-[11px] text-muted-foreground font-normal truncate">
+                ({primaryWorktree.branch})
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <ActionButton
+              icon={RefreshCw}
+              title="Refresh"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRefresh?.()
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="px-3 pt-2 pb-2 border-b border-border/20">
+          <div className="relative">
+            <textarea
+              rows={3}
+              value={commitMessage}
+              disabled={isCommitting}
+              onChange={handleMessageChange}
+              placeholder={`Message (⌘Enter to commit on "${primaryWorktree?.branch || 'main'}")`}
+              aria-label={`Commit message for ${project.repoName}`}
+              data-testid={`commit-input-${project.repoName}`}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault()
+                  void handleCommit()
+                }
+              }}
+              className="mt-0.5 min-h-14 w-full resize-none appearance-none rounded-md border border-input bg-background shadow-xs px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring dark:bg-input/30"
+            />
+          </div>
+
+          {commitError && (
+            <div className="text-[11px] text-destructive mt-1 font-medium">{commitError}</div>
           )}
-        </div>
-
-        {/* Quick Action Buttons */}
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={handleStageAll}
-            title="Stage All"
-            aria-label="Stage All"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1 text-green-500" />
-            Stage All
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={handleUnstageAll}
-            title="Unstage All"
-            aria-label="Unstage All"
-          >
-            <Minus className="h-3.5 w-3.5 mr-1 text-amber-500" />
-            Unstage All
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={handleDiscardAll}
-            title="Discard All"
-            aria-label="Discard All"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1 text-red-500" />
-            Discard All
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onRefresh}
-            title="Refresh"
-            aria-label="Refresh"
-          >
-            <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Staged Changes Section */}
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          className="flex items-center justify-between text-muted-foreground hover:text-foreground text-left py-1"
-          onClick={() => setIsStagedOpen(!isStagedOpen)}
-        >
-          <div className="flex items-center gap-1">
-            {isStagedOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            <span className="font-medium">Staged Changes</span>
-          </div>
-          <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-            {stagedFiles.length}
-          </Badge>
-        </button>
-
-        {isStagedOpen && (
-          <div className="flex flex-col gap-0.5 pl-3">
-            {stagedFiles.length === 0 ? (
-              <div className="text-[11px] text-muted-foreground py-1 italic">No staged changes</div>
-            ) : (
-              stagedFiles.map(({ worktreeId: fileWtId, entry }, idx) => (
-                <div
-                  key={`${entry.path}-${idx}`}
-                  role="button"
-                  tabIndex={0}
-                  className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-muted/50 cursor-pointer group"
-                  onClick={() => handleFileClick(fileWtId, entry.path, true)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleFileClick(fileWtId, entry.path, true)
-                    }
-                  }}
-                  data-testid={`file-row-${entry.path}`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <FileCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{entry.path}</span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-green-500 border-green-500/30">
-                    {entry.status || 'M'}
-                  </Badge>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Changes Section */}
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          className="flex items-center justify-between text-muted-foreground hover:text-foreground text-left py-1"
-          onClick={() => setIsChangesOpen(!isChangesOpen)}
-        >
-          <div className="flex items-center gap-1">
-            {isChangesOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            <span className="font-medium">Changes</span>
-          </div>
-          <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-            {unstagedFiles.length}
-          </Badge>
-        </button>
-
-        {isChangesOpen && (
-          <div className="flex flex-col gap-0.5 pl-3">
-            {unstagedFiles.length === 0 ? (
-              <div className="text-[11px] text-muted-foreground py-1 italic">No unstaged changes</div>
-            ) : (
-              unstagedFiles.map(({ worktreeId: fileWtId, entry }, idx) => (
-                <div
-                  key={`${entry.path}-${idx}`}
-                  role="button"
-                  tabIndex={0}
-                  className="flex items-center justify-between py-1 px-1.5 rounded hover:bg-muted/50 cursor-pointer group"
-                  onClick={() => handleFileClick(fileWtId, entry.path, false)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleFileClick(fileWtId, entry.path, false)
-                    }
-                  }}
-                  data-testid={`file-row-${entry.path}`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <FileCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{entry.path}</span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-500 border-amber-500/30">
-                    {entry.status || 'M'}
-                  </Badge>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Dedicated Commit Area */}
-      <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
-        <Textarea
-          placeholder={`Commit message for ${project.repoName}...`}
-          value={commitMessage}
-          onChange={handleMessageChange}
-          rows={2}
-          className="text-xs resize-none"
-          aria-label={`Commit message for ${project.repoName}`}
-          data-testid={`commit-input-${project.repoName}`}
-        />
-
-        {commitError && (
-          <div className="text-[11px] text-red-500 px-1">{commitError}</div>
-        )}
-
-        <div className="flex items-center justify-between gap-2">
-          {commitSuccess ? (
-            <span className="text-[11px] text-green-500 flex items-center gap-1">
-              <Check className="h-3 w-3" /> Committed!
-            </span>
-          ) : (
-            <span />
+          {commitSuccess && (
+            <div className="text-[11px] text-workspace-status-review mt-1 flex items-center gap-1 font-medium">
+              <Check className="size-3" /> Committed!
+            </div>
           )}
 
           <Button
             size="sm"
-            className="h-7 px-3 text-xs ml-auto"
+            className="w-full mt-2 h-7 text-xs gap-1.5 font-medium"
             disabled={!commitMessage.trim() || isCommitting}
             onClick={handleCommit}
             data-testid={`commit-button-${project.repoName}`}
           >
-            <GitCommit className="h-3.5 w-3.5 mr-1" />
-            {isCommitting ? 'Committing...' : 'Commit'}
+            <Check className="size-3.5" />
+            {isCommitting ? 'Committing...' : `Commit to ${primaryWorktree?.branch || 'main'}`}
           </Button>
         </div>
+
+        <ProjectSourceControlSectionGroup
+          worktreePath={worktreePath}
+          stagedFiles={stagedFiles}
+          unstagedFiles={unstagedFiles}
+          untrackedFiles={untrackedFiles}
+          onStageAll={handleStageAll}
+          onUnstageAll={handleUnstageAll}
+          onDiscardAll={handleDiscardAll}
+          onStagePath={handleStagePath}
+          onUnstagePath={handleUnstagePath}
+          onDiscardEntry={handleDiscardEntry}
+          onFileClick={handleFileClick}
+          onRevealInExplorer={handleRevealInExplorer}
+        />
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
+
 export default ProjectSourceControlScope
