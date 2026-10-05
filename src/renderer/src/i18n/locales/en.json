@@ -16914,29 +16914,7 @@
           "matchedBy": "Matched by {{matchedBy}}"
         },
         "lineageSourceControl": {
-          "loading": "Loading lineage status...",
-          "retry": "Retry",
-          "clean": "No changes across lineage worktrees",
-          "cleanDescription": "All child repositories in this lineage are up to date.",
-          "title": "Source Control",
-          "refreshAll": "Refresh All",
-          "refresh": "Refresh",
-          "commitPlaceholder": "Message (⌘Enter to commit on \"{{branch}}\")",
-          "commitMessageFor": "Commit message for {{repo}}",
-          "committed": "Committed!",
-          "committing": "Committing...",
-          "commitTo": "Commit to {{branch}}",
-          "stagedChanges": "Staged Changes",
-          "unstageAll": "Unstage All",
-          "changes": "Changes",
-          "discardAll": "Discard All",
-          "stageAll": "Stage All",
-          "untrackedFiles": "Untracked Files",
-          "worktreeClean": "No changes in this worktree",
-          "unverifiable": "unverifiable",
-          "discardAllTitle": "Discard {{count}} files on {{branch}}?",
-          "discardAllDescription": "This cannot be undone.",
-          "discardAllConfirm": "Discard"
+          "unverifiable": "unverifiable"
         }
       },
       "link": {
