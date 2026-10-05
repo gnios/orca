@@ -54,3 +54,18 @@ export function createLineagePatternScanCache(
     }
   }
 }
+
+/** invariant: within one resolution a repo is scanned at most once, even when the caller forces a refresh. */
+export function scopeLineageScanToRequest(cache: LineagePatternScanCache): LineagePatternScanCache {
+  const loaded = new Set<string>()
+  return {
+    getOrLoad(repoPath, load, force = false) {
+      const forceThisOne = force && !loaded.has(repoPath)
+      loaded.add(repoPath)
+      return cache.getOrLoad(repoPath, load, forceThisOne)
+    },
+    clear() {
+      cache.clear()
+    }
+  }
+}

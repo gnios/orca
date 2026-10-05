@@ -1,16 +1,15 @@
-import type { LineageMember, LineageMemberPullRequest } from '../../shared/lineage-discovery-types'
-import { parsePullRequestReference } from '../../shared/lineage-pr-reference'
+import type { LineageMember } from '../../shared/lineage-discovery-types'
 import {
   resolveLineageTargets,
   type ResolveLineageTargetsOptions
 } from './lineage-target-resolution'
 import { mergeLineageMembers } from './lineage-member-merge'
+import { resolveManualLinkMembers } from './lineage-manual-link-resolution'
+import {
+  createLineagePatternScanCache,
+  scopeLineageScanToRequest
+} from './lineage-pattern-scan-cache'
 import type { LineageStoreContract } from './workspace-lineage-service'
-
-function providerOf(url: string | undefined): Pick<LineageMemberPullRequest, 'provider'> {
-  const provider = url ? parsePullRequestReference(url)?.provider : undefined
-  return provider ? { provider } : {}
-}
 
 export type ResolvedLineageMembers = {
   members: LineageMember[]
@@ -23,11 +22,13 @@ export async function resolveLineageMembers(
   parentWorkspaceKey: string,
   options: ResolveLineageTargetsOptions = {}
 ): Promise<ResolvedLineageMembers> {
-  const { targets, keys, patternError } = await resolveLineageTargets(
-    store,
-    parentWorkspaceKey,
-    options
+  const patternScanCache = scopeLineageScanToRequest(
+    options.patternScanCache ?? createLineagePatternScanCache()
   )
+  const { targets, keys, patternError } = await resolveLineageTargets(store, parentWorkspaceKey, {
+    ...options,
+    patternScanCache
+  })
   const fromWorktrees: LineageMember[] = targets.map((target) => ({
     repoName: target.repoName,
     branch: target.branchHint,
@@ -38,19 +39,14 @@ export async function resolveLineageMembers(
     ...(target.isTower ? { isTower: true } : {}),
     ...(target.unverifiable ? { unverifiable: true } : {})
   }))
-  const manual: LineageMember[] = (store.getLineageManualLinks?.(parentWorkspaceKey) ?? []).map(
-    (link) => ({
-      repoName: link.repoName,
-      branch: '',
-      matchedBy: 'manual',
-      pr: {
-        number: link.number,
-        ...(link.url ? { url: link.url } : {}),
-        ...providerOf(link.url)
-      },
-      manualLinkId: link.id,
-      reasons: ['added manually']
-    })
+  const manual = await resolveManualLinkMembers(
+    store.getLineageManualLinks?.(parentWorkspaceKey) ?? [],
+    store.getRepos?.() ?? [],
+    {
+      listWorktreesFn: options.listWorktreesFn,
+      patternScanCache,
+      force: options.force
+    }
   )
   const members = mergeLineageMembers([...fromWorktrees, ...manual])
   return patternError ? { members, keys, patternError } : { members, keys }

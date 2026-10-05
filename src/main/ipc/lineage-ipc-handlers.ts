@@ -32,6 +32,7 @@ import {
 import { createLineagePatternScanCache } from '../lineage/lineage-pattern-scan-cache'
 import { addLineageManualLink, removeLineageManualLink } from '../lineage/lineage-manual-links'
 import { testLineagePattern } from '../lineage/lineage-pattern-test'
+import { lookupLineagePullRequestHeadBranch } from '../lineage/lineage-pr-head-branch'
 
 export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   const patternScanCache = createLineagePatternScanCache()
@@ -88,7 +89,9 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
     'lineage:add-manual-link',
     async (_event, args: LineageAddManualLinkArgs): Promise<LineageAddManualLinkResult> => {
       patternScanCache.clear()
-      return addLineageManualLink(store, args)
+      return addLineageManualLink(store, args, {
+        lookupPullRequestHeadBranch: lookupLineagePullRequestHeadBranch
+      })
     }
   )
 

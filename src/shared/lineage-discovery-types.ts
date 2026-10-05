@@ -21,13 +21,25 @@ export const DEFAULT_LINEAGE_DISCOVERY: LineageDiscoverySettings = {
   repoScope: 'all'
 }
 
-export type ManualPullRequestLink = {
+export type LineageManualLinkKind = 'pr' | 'branch' | 'worktree'
+
+// invariant: kind absent means 'pr' (links saved before kinds); number is required for 'pr', branch for 'branch', worktreePath for 'worktree'
+export type LineageManualLink = {
   id: string
+  kind?: LineageManualLinkKind
   repoName: string
-  number: number
+  repoId?: string
+  number?: number
   url?: string
+  // why: for 'pr' this is the head branch resolved once at add time, so a local worktree can match
+  branch?: string
+  worktreePath?: string
+  worktreeId?: string
   addedAt: number
 }
+
+// why: compat alias for older imports; a manual link is no longer only a pull request
+export type ManualPullRequestLink = LineageManualLink
 
 export type LineageMemberPullRequest = {
   number: number

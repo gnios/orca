@@ -3,7 +3,11 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
-import type { ManualPullRequestLink } from '../../../shared/lineage-discovery-types'
+import type { LineageManualLink } from '../../../shared/lineage-discovery-types'
+import {
+  dedupeLineageManualLinks,
+  isLineageManualLink
+} from '../../../shared/lineage-manual-link-shape'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
@@ -114,24 +118,8 @@ export function normalizeLoadedProfileState(
   }
 }
 
-function isManualLink(value: unknown): value is ManualPullRequestLink {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const link: Partial<Record<keyof ManualPullRequestLink, unknown>> = value
-  return (
-    typeof link.id === 'string' &&
-    typeof link.repoName === 'string' &&
-    typeof link.number === 'number' &&
-    Number.isInteger(link.number) &&
-    link.number > 0
-  )
-}
-
-export function normalizeManualLinks(
-  value: unknown
-): Record<WorkspaceKey, ManualPullRequestLink[]> {
-  const normalized: Record<WorkspaceKey, ManualPullRequestLink[]> = {}
+export function normalizeManualLinks(value: unknown): Record<WorkspaceKey, LineageManualLink[]> {
+  const normalized: Record<WorkspaceKey, LineageManualLink[]> = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return normalized
   }
@@ -139,7 +127,7 @@ export function normalizeManualLinks(
     if (!isWorkspaceKey(key) || !Array.isArray(links)) {
       continue
     }
-    const valid = links.filter(isManualLink)
+    const valid = dedupeLineageManualLinks(links.filter(isLineageManualLink))
     if (valid.length > 0) {
       normalized[key] = valid
     }

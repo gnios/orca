@@ -105,7 +105,18 @@ export type LineageGetMembersResult = {
   patternError?: string
 }
 
-export type LineageAddManualLinkArgs = { parentWorkspaceKey: string; reference: string }
+export type LineageManualLinkTarget =
+  | { kind: 'worktree'; repoId: string; worktreePath: string }
+  | { kind: 'branch'; repoId: string; branch: string }
+  | { kind: 'pr'; reference: string }
+
+export type LineageAddManualLinkArgs = {
+  parentWorkspaceKey: string
+  /** Legacy pull request reference; used when `target` is absent. */
+  reference?: string
+  /** Absent from older renderers, which send only `reference`. */
+  target?: LineageManualLinkTarget
+}
 
 export type LineageAddManualLinkResult = {
   success: boolean

@@ -15,15 +15,21 @@ const store: LineageStoreContract = {
 }
 
 describe('lineage ipc input validation', () => {
-  it('rejects empty or non-string add-manual-link inputs without throwing', () => {
+  it('rejects empty or non-string add-manual-link inputs without throwing', async () => {
     for (const args of [
       { parentWorkspaceKey: '', reference: 'loan-core#1' },
       { parentWorkspaceKey: 'p', reference: '' },
       { parentWorkspaceKey: 5, reference: 'loan-core#1' },
+      { parentWorkspaceKey: 'p', reference: 'loan-core#1'.padEnd(2049, 'x') },
+      { parentWorkspaceKey: 'p', target: { kind: 'nonsense' } },
+      { parentWorkspaceKey: 'p', target: { kind: 'branch', repoId: 7, branch: 'x' } },
+      { parentWorkspaceKey: 'p', target: { kind: 'worktree', repoId: 'r1' } },
+      { parentWorkspaceKey: 'p', target: { kind: 'pr', reference: 12 } },
+      { parentWorkspaceKey: 'p', target: 'loan-core#1' },
       undefined
     ]) {
       // @ts-expect-error deliberately malformed IPC payload
-      const res = addLineageManualLink(store, args)
+      const res = await addLineageManualLink(store, args)
       expect(res.success).toBe(false)
       expect(res.error).toBeTruthy()
     }

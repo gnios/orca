@@ -12,6 +12,7 @@ import type { WorkspaceKey } from '../../../src/shared/folder-workspace-types'
 import { getLineageStatus } from '../../../src/main/lineage/lineage-git-status-service'
 import { resolveLineageMembers } from '../../../src/main/lineage/lineage-member-resolver'
 import { resolveEffectiveDiscoverySettings } from '../../../src/main/lineage/lineage-discovery-settings'
+import { createLineagePatternScanCache } from '../../../src/main/lineage/lineage-pattern-scan-cache'
 import type { LineageStoreContract } from '../../../src/main/lineage/workspace-lineage-service'
 
 const PARENT: WorkspaceKey = 'worktree:r0::/o/tower/levgp-483-new-loan'
@@ -310,5 +311,199 @@ describe('getLineageStatus shares the resolver', () => {
     expect(all).toHaveLength(1)
     expect(all[0]).toMatchObject({ matchedBy: 'pattern', reason: ['branch matches LEVGP-483'] })
     expect(payload.projects.ghost).toBeUndefined()
+  })
+})
+
+describe('manual links resolve to local worktrees', () => {
+  const noPattern = { patternEnabled: false }
+  const scan = async (repoPath: string): Promise<GitWorktreeInfo[]> => [
+    wt(repoPath, 'refs/heads/main'),
+    wt(`${repoPath}-wt/feat`, 'refs/heads/feat/x')
+  ]
+
+  it('maps a worktree link to that worktree', async () => {
+    const links: ManualPullRequestLink[] = [
+      {
+        id: 'w',
+        kind: 'worktree',
+        repoName: 'loan-core',
+        repoId: 'r1',
+        worktreePath: '/repos/loan-core-wt/feat',
+        worktreeId: 'r1::/repos/loan-core-wt/feat',
+        addedAt: 1
+      }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos, links, settings: noPattern }),
+      PARENT,
+      { listWorktreesFn: scan }
+    )
+    expect(members).toEqual([
+      {
+        repoName: 'loan-core',
+        branch: 'feat/x',
+        worktreePath: '/repos/loan-core-wt/feat',
+        worktreeId: 'r1::/repos/loan-core-wt/feat',
+        matchedBy: 'manual',
+        manualLinkId: 'w',
+        reasons: ['added manually']
+      }
+    ])
+  })
+
+  it('maps a branch link to the worktree that has it checked out', async () => {
+    const links: ManualPullRequestLink[] = [
+      { id: 'b', kind: 'branch', repoName: 'loan-core', repoId: 'r1', branch: 'feat/x', addedAt: 1 }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos, links, settings: noPattern }),
+      PARENT,
+      { listWorktreesFn: scan }
+    )
+    expect(members).toEqual([
+      expect.objectContaining({
+        worktreePath: '/repos/loan-core-wt/feat',
+        worktreeId: 'r1::/repos/loan-core-wt/feat',
+        branch: 'feat/x',
+        matchedBy: 'manual',
+        manualLinkId: 'b'
+      })
+    ])
+  })
+
+  it('folds a PR with a stored branch into the pattern member of the same worktree, manual winning', async () => {
+    const links: ManualPullRequestLink[] = [
+      {
+        id: 'p',
+        kind: 'pr',
+        repoName: 'loan-core',
+        repoId: 'r1',
+        number: 9,
+        url: 'https://github.com/o/loan-core/pull/9',
+        branch: 'feature/levgp-483-x',
+        addedAt: 1
+      }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos: [repos[0]], links }),
+      PARENT,
+      { listWorktreesFn }
+    )
+    const onWorktree = members.filter((m) => m.worktreePath === '/repos/loan-core')
+    expect(onWorktree).toHaveLength(1)
+    expect(onWorktree[0]).toMatchObject({
+      matchedBy: 'manual',
+      manualLinkId: 'p',
+      pr: { number: 9, provider: 'github' },
+      worktreeId: 'r1::/repos/loan-core'
+    })
+    expect(onWorktree[0].reasons).toEqual(['added manually', 'branch matches LEVGP-483'])
+  })
+
+  it('keeps a branch or PR that is not checked out as a worktree-less member', async () => {
+    const links: ManualPullRequestLink[] = [
+      { id: 'b', kind: 'branch', repoName: 'loan-core', repoId: 'r1', branch: 'gone', addedAt: 1 },
+      { id: 'p', repoName: 'loan-core', number: 3, branch: 'elsewhere', addedAt: 1 }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos, links, settings: noPattern }),
+      PARENT,
+      { listWorktreesFn: scan }
+    )
+    expect(members).toEqual([
+      {
+        repoName: 'loan-core',
+        branch: 'gone',
+        matchedBy: 'manual',
+        manualLinkId: 'b',
+        reasons: ['added manually']
+      },
+      {
+        repoName: 'loan-core',
+        branch: 'elsewhere',
+        matchedBy: 'manual',
+        pr: { number: 3 },
+        manualLinkId: 'p',
+        reasons: ['added manually']
+      }
+    ])
+  })
+
+  it('keeps an SSH worktree link unverifiable without scanning the remote repo', async () => {
+    const seen: string[] = []
+    const remote = { id: 'r9', path: '/remote/api', displayName: 'api', connectionId: 'ssh-1' }
+    const links: ManualPullRequestLink[] = [
+      {
+        id: 'w',
+        kind: 'worktree',
+        repoName: 'api',
+        repoId: 'r9',
+        worktreePath: '/remote/api-wt',
+        worktreeId: 'r9::/remote/api-wt',
+        addedAt: 1
+      },
+      { id: 'b', kind: 'branch', repoName: 'api', repoId: 'r9', branch: 'feat', addedAt: 1 }
+    ]
+    const { members } = await resolveLineageMembers(
+      makeStore({ repos: [remote], links, settings: noPattern }),
+      PARENT,
+      {
+        listWorktreesFn: async (p) => {
+          seen.push(p)
+          return []
+        }
+      }
+    )
+    expect(seen).toEqual([])
+    expect(members[0]).toEqual({
+      repoName: 'api',
+      branch: '',
+      worktreePath: '/remote/api-wt',
+      worktreeId: 'r9::/remote/api-wt',
+      matchedBy: 'manual',
+      manualLinkId: 'w',
+      reasons: ['added manually'],
+      unverifiable: true
+    })
+    expect(members[1]).toMatchObject({ branch: 'feat', manualLinkId: 'b' })
+    expect(members[1].worktreePath).toBeUndefined()
+  })
+
+  it('reuses the pattern scan for manual links and scans nothing when no link needs it', async () => {
+    const seen: string[] = []
+    const counting = async (p: string) => {
+      seen.push(p)
+      return listWorktreesFn(p)
+    }
+    const links: ManualPullRequestLink[] = [
+      { id: 'b', kind: 'branch', repoName: 'loan-core', repoId: 'r1', branch: 'other', addedAt: 1 }
+    ]
+    const patternScanCache = createLineagePatternScanCache()
+    await resolveLineageMembers(makeStore({ repos, links }), PARENT, {
+      listWorktreesFn: counting,
+      patternScanCache
+    })
+    expect(seen.sort()).toEqual(['/repos/credit', '/repos/loan-core'])
+
+    seen.length = 0
+    await resolveLineageMembers(makeStore({ repos, links }), PARENT, {
+      listWorktreesFn: counting,
+      patternScanCache,
+      force: true
+    })
+    expect(seen.sort()).toEqual(['/repos/credit', '/repos/loan-core'])
+
+    seen.length = 0
+    await resolveLineageMembers(makeStore({ repos, links }), PARENT, { listWorktreesFn: counting })
+    expect(seen.sort()).toEqual(['/repos/credit', '/repos/loan-core'])
+
+    seen.length = 0
+    const prOnly: ManualPullRequestLink[] = [
+      { id: 'p', repoName: 'loan-core', number: 1, addedAt: 1 }
+    ]
+    await resolveLineageMembers(makeStore({ repos, links: prOnly, settings: noPattern }), PARENT, {
+      listWorktreesFn: counting
+    })
+    expect(seen).toEqual([])
   })
 })

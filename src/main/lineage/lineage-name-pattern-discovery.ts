@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { LineagePatternMatchOn } from '../../shared/lineage-discovery-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import type { RepoKind } from '../../shared/repo-types'
 import { listWorktrees } from '../git/worktree'
 import { matchesTicketKeys } from '../../shared/lineage-ticket-keys'
 import type { LineagePatternScanCache } from './lineage-pattern-scan-cache'
@@ -12,6 +13,7 @@ export type PatternRepo = {
   path: string
   displayName: string
   connectionId?: string | null
+  kind?: RepoKind
 }
 
 export type PatternTarget = {
@@ -35,6 +37,33 @@ export type DiscoverPatternTargetsArgs = {
   force?: boolean
 }
 
+export type ListRepoWorktreesOptions = {
+  listWorktreesFn?: (repoPath: string) => Promise<GitWorktreeInfo[]>
+  patternScanCache?: LineagePatternScanCache
+  force?: boolean
+}
+
+/** invariant: the one per-repo worktree scan; pattern discovery and manual links share its cache. */
+export async function listRepoWorktrees(
+  repo: PatternRepo,
+  { listWorktreesFn = listWorktrees, patternScanCache, force }: ListRepoWorktreesOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const load = async (): Promise<GitWorktreeInfo[]> => {
+    try {
+      return await listWorktreesFn(repo.path)
+    } catch {
+      return []
+    }
+  }
+  return patternScanCache ? patternScanCache.getOrLoad(repo.path, load, force) : load()
+}
+
+export function worktreeBranchName(worktree: GitWorktreeInfo): string {
+  return worktree.branch.startsWith(BRANCH_REF_PREFIX)
+    ? worktree.branch.slice(BRANCH_REF_PREFIX.length)
+    : worktree.branch
+}
+
 /** Finds worktrees (primary checkouts included) across local repos whose branch carries a ticket key. */
 export async function discoverPatternTargets(
   args: DiscoverPatternTargetsArgs
@@ -45,7 +74,7 @@ export async function discoverPatternTargets(
     excludePaths = [],
     matchOn = 'branch',
     repoScope = 'all',
-    listWorktreesFn = listWorktrees,
+    listWorktreesFn,
     patternScanCache,
     force
   } = args
@@ -58,23 +87,10 @@ export async function discoverPatternTargets(
     (repo) => !repo.connectionId && (repoScope === 'all' || repoScope.includes(repo.id))
   )
   const perRepo = await Promise.all(
-    localRepos.map(
-      async (
-        repo
-      ): Promise<{ repo: (typeof localRepos)[number]; worktrees: GitWorktreeInfo[] }> => {
-        const load = async (): Promise<GitWorktreeInfo[]> => {
-          try {
-            return await listWorktreesFn(repo.path)
-          } catch {
-            return []
-          }
-        }
-        const worktrees = patternScanCache
-          ? await patternScanCache.getOrLoad(repo.path, load, force)
-          : await load()
-        return { repo, worktrees }
-      }
-    )
+    localRepos.map(async (repo) => ({
+      repo,
+      worktrees: await listRepoWorktrees(repo, { listWorktreesFn, patternScanCache, force })
+    }))
   )
 
   const targets: PatternTarget[] = []
@@ -83,9 +99,7 @@ export async function discoverPatternTargets(
       if (worktree.isBare || excludePaths.includes(worktree.path)) {
         continue
       }
-      const branch = worktree.branch.startsWith(BRANCH_REF_PREFIX)
-        ? worktree.branch.slice(BRANCH_REF_PREFIX.length)
-        : worktree.branch
+      const branch = worktreeBranchName(worktree)
       const candidates: { matchedOn: PatternTarget['matchedOn']; text: string }[] = []
       if (matchOn !== 'worktree-name') {
         candidates.push({ matchedOn: 'branch', text: branch })
