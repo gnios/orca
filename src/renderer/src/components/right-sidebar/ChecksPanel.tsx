@@ -199,10 +199,17 @@ export default function ChecksPanel(): React.JSX.Element {
   const towerKey = useAppStore((s) => s.activeWorkspaceKey ?? s.activeWorktreeId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreePath = useActiveWorktree()?.path ?? null
-  const { members, supported } = useLineageMembers(towerKey)
+  const { members, supported, refresh } = useLineageMembers(towerKey)
   const active = { id: activeWorktreeId, path: activeWorktreePath }
   if (supported && hasMembersBeyondTower(members, active)) {
-    return <LineageChecksSections members={members} PanelComponent={SingleWorktreeChecksPanel} />
+    return (
+      <LineageChecksSections
+        members={members}
+        PanelComponent={SingleWorktreeChecksPanel}
+        parentWorkspaceKey={towerKey ?? undefined}
+        onMembersChanged={() => void refresh()}
+      />
+    )
   }
   return <SingleWorktreeChecksPanel />
 }

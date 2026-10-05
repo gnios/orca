@@ -32,7 +32,7 @@ import {
 
 import { resolveLineageMembers } from '../lineage/lineage-member-resolver'
 import { addLineageManualLink, removeLineageManualLink } from '../lineage/lineage-manual-links'
-import { extractKeysWithPattern } from '../../shared/lineage-ticket-keys'
+import { testLineagePattern } from '../lineage/lineage-pattern-test'
 
 export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.removeHandler('workspace:attach-to-parent')
@@ -55,7 +55,9 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.handle(
     'git:lineage-get-status',
     async (_event, args: LineageGitStatusArgs): Promise<LineageGitStatusPayload> => {
-      return getLineageStatus(store, args.parentWorkspaceKey, { ticketKeys: args.ticketKeys })
+      return getLineageStatus(store, args.parentWorkspaceKey, {
+        ticketKeys: args.ticketKeys
+      })
     }
   )
 
@@ -81,8 +83,12 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.handle(
     'lineage:get-members',
     async (_event, args: LineageGetMembersArgs): Promise<LineageGetMembersResult> => {
-      const resolved = await resolveLineageMembers(store, args.parentWorkspaceKey)
-      return { status: 200, parentWorkspaceKey: args.parentWorkspaceKey, ...resolved }
+      const key = typeof args?.parentWorkspaceKey === 'string' ? args.parentWorkspaceKey : ''
+      if (!key) {
+        return { status: 200, parentWorkspaceKey: key, keys: [], members: [] }
+      }
+      const resolved = await resolveLineageMembers(store, key)
+      return { status: 200, parentWorkspaceKey: key, ...resolved }
     }
   )
 
@@ -104,6 +110,6 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.handle(
     'lineage:test-pattern',
     async (_event, args: LineageTestPatternArgs): Promise<LineageTestPatternResult> =>
-      extractKeysWithPattern(args.towerName, args.keyRegex)
+      testLineagePattern(args)
   )
 }

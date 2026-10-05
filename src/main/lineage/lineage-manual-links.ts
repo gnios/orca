@@ -7,10 +7,18 @@ import type {
 import { parsePullRequestReference } from '../../shared/lineage-pr-reference'
 import type { LineageStoreContract } from './workspace-lineage-service'
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
 export function addLineageManualLink(
   store: LineageStoreContract,
   args: LineageAddManualLinkArgs
 ): LineageAddManualLinkResult {
+  // hazard: IPC payloads are untrusted at runtime despite the static types
+  if (!isNonEmptyString(args?.parentWorkspaceKey) || !isNonEmptyString(args?.reference)) {
+    return { success: false, error: 'Invalid pull request reference' }
+  }
   const parsed = parsePullRequestReference(args.reference)
   if (!parsed) {
     return { success: false, error: 'Unrecognized pull request reference' }
@@ -43,6 +51,9 @@ export function removeLineageManualLink(
   store: LineageStoreContract,
   args: LineageRemoveManualLinkArgs
 ): LineageRemoveManualLinkResult {
+  if (!isNonEmptyString(args?.parentWorkspaceKey) || !isNonEmptyString(args?.linkId)) {
+    return { success: false }
+  }
   const existing = store.getLineageManualLinks?.(args.parentWorkspaceKey) ?? []
   store.setLineageManualLinks?.(
     args.parentWorkspaceKey,

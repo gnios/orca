@@ -1,6 +1,6 @@
 // why: the sections render through React DOM, so @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
 import { useAppStore } from '@/store'
@@ -140,5 +140,56 @@ describe('LineageChecksSections', () => {
     const row = screen.getByTestId('lineage-checks-pr-row-docs-9')
     expect(within(row).getByText('Document ABC-1')).toBeTruthy()
     expect(within(row).queryByRole('button')).toBeNull()
+  })
+
+  it('offers Remove only for manual members and unlinks then refreshes', async () => {
+    const removeLink = vi.fn().mockResolvedValue({ success: true })
+    const onMembersChanged = vi.fn()
+    const originalApi = window.api
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      writable: true,
+      value: { ...originalApi, git: { lineageRemoveManualLink: removeLink } }
+    })
+    try {
+      render(
+        <LineageChecksSections
+          members={members}
+          PanelComponent={StubPanel}
+          parentWorkspaceKey="tower"
+          onMembersChanged={onMembersChanged}
+        />
+      )
+      expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(1)
+      fireEvent.click(screen.getByRole('button', { name: 'Remove docs#5' }))
+      await waitFor(() =>
+        expect(removeLink).toHaveBeenCalledWith({
+          parentWorkspaceKey: 'tower',
+          linkId: 'm1'
+        })
+      )
+      await waitFor(() => expect(onMembersChanged).toHaveBeenCalled())
+    } finally {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        writable: true,
+        value: originalApi
+      })
+    }
+  })
+
+  it('renders the Add PR control in the sections header when a workspace key is given', () => {
+    const { rerender } = render(
+      <LineageChecksSections members={members} PanelComponent={StubPanel} />
+    )
+    expect(screen.queryByRole('button', { name: 'Add PR' })).toBeNull()
+    rerender(
+      <LineageChecksSections
+        members={members}
+        PanelComponent={StubPanel}
+        parentWorkspaceKey="tower"
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Add PR' })).toBeTruthy()
   })
 })

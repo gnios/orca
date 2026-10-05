@@ -11,13 +11,21 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { LineageOriginBadge } from '../lineage-origin-badge'
+import { AddManualPullRequest } from '../lineage-members/AddManualPullRequest'
+import { RemoveManualPullRequestButton } from '../lineage-members/RemoveManualPullRequestButton'
 import { ChecksPanelTargetProvider } from './checks-panel-target-worktree'
 
 type LineageChecksSectionsProps = {
   members: LineageMember[]
   /** The original single-worktree Checks panel, rendered once per member worktree. */
   PanelComponent: React.ComponentType
+  /** Enables Add PR and Remove; absent when the host cannot persist manual links. */
+  parentWorkspaceKey?: string
+  /** Called after a manual link is added or removed so members can be re-fetched. */
+  onMembersChanged?: () => void
 }
+
+type ManualLinkActions = { parentWorkspaceKey: string; onChanged: () => void }
 
 type ResolvedMember = { member: LineageMember; worktree: Worktree | null }
 type RepoGroup = {
@@ -49,7 +57,33 @@ function pullRequestLabel(member: LineageMember): string {
   return member.pr ? `${member.repoName}#${member.pr.number}` : member.repoName
 }
 
-function LineagePullRequestRow({ member }: { member: LineageMember }): React.JSX.Element {
+function ManualRemoveButton({
+  member,
+  actions
+}: {
+  member: LineageMember
+  actions?: ManualLinkActions
+}): React.JSX.Element | null {
+  if (!actions || member.matchedBy !== 'manual' || !member.manualLinkId) {
+    return null
+  }
+  return (
+    <RemoveManualPullRequestButton
+      parentWorkspaceKey={actions.parentWorkspaceKey}
+      linkId={member.manualLinkId}
+      label={pullRequestLabel(member)}
+      onChanged={actions.onChanged}
+    />
+  )
+}
+
+function LineagePullRequestRow({
+  member,
+  actions
+}: {
+  member: LineageMember
+  actions?: ManualLinkActions
+}): React.JSX.Element {
   const label = pullRequestLabel(member)
   const url = member.pr?.url
   return (
@@ -63,6 +97,7 @@ function LineagePullRequestRow({ member }: { member: LineageMember }): React.JSX
       </span>
       <LineageOriginBadge matchedBy={member.matchedBy} reasons={member.reasons} />
       <div className="flex-1" />
+      <ManualRemoveButton member={member} actions={actions} />
       {url ? (
         <Button
           type="button"
@@ -83,12 +118,14 @@ function LineageChecksSection({
   group,
   isOpen,
   onOpenChange,
-  PanelComponent
+  PanelComponent,
+  actions
 }: {
   group: RepoGroup
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   PanelComponent: React.ComponentType
+  actions?: ManualLinkActions
 }): React.JSX.Element {
   const lead = group.entries.find((entry) => entry.worktree !== null) ?? group.entries[0]
   const prNumber = group.entries.find((entry) => entry.member.pr)?.member.pr?.number
@@ -100,13 +137,13 @@ function LineageChecksSection({
       className="flex flex-col"
       data-testid={`lineage-checks-section-${group.repoName}`}
     >
-      <div className="pl-1 pr-3 pt-1.5 pb-1">
+      <div className="flex items-center gap-1 pl-1 pr-3 pt-1.5 pb-1">
         <CollapsibleTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="xs"
-            className="w-full justify-start text-left"
+            className="min-w-0 flex-1 justify-start text-left"
           >
             <span className="flex min-w-0 flex-1 items-center gap-x-1.5 font-semibold">
               <ChevronDown
@@ -133,6 +170,7 @@ function LineageChecksSection({
             </span>
           </Button>
         </CollapsibleTrigger>
+        <ManualRemoveButton member={lead.member} actions={actions} />
       </div>
       {/* invariant: Radix unmounts closed content, so a collapsed section runs no panel fetches or polling */}
       <CollapsibleContent className="flex flex-col">
@@ -147,7 +185,11 @@ function LineageChecksSection({
               </ChecksPanelTargetProvider>
             </div>
           ) : (
-            <LineagePullRequestRow key={pullRequestLabel(member)} member={member} />
+            <LineagePullRequestRow
+              key={pullRequestLabel(member)}
+              member={member}
+              actions={actions}
+            />
           )
         )}
       </CollapsibleContent>
@@ -157,7 +199,9 @@ function LineageChecksSection({
 
 export function LineageChecksSections({
   members,
-  PanelComponent
+  PanelComponent,
+  parentWorkspaceKey,
+  onMembersChanged
 }: LineageChecksSectionsProps): React.JSX.Element {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const allWorktrees = useAllWorktrees()
@@ -176,6 +220,9 @@ export function LineageChecksSections({
       }),
     [allWorktrees, members, worktreesByRepo]
   )
+  const actions: ManualLinkActions | undefined = parentWorkspaceKey
+    ? { parentWorkspaceKey, onChanged: onMembersChanged ?? (() => {}) }
+    : undefined
   const firstSectionRepo = groups.find((group) => group.hasWorktree)?.repoName
 
   return (
@@ -184,6 +231,14 @@ export function LineageChecksSections({
         className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek"
         data-testid="lineage-checks-sections"
       >
+        {actions ? (
+          <div className="flex justify-end px-3 pt-1.5">
+            <AddManualPullRequest
+              parentWorkspaceKey={actions.parentWorkspaceKey}
+              onChanged={actions.onChanged}
+            />
+          </div>
+        ) : null}
         <div className="flex flex-col divide-y divide-border/40">
           {groups.map((group) =>
             group.hasWorktree ? (
@@ -198,10 +253,15 @@ export function LineageChecksSections({
                   }))
                 }
                 PanelComponent={PanelComponent}
+                actions={actions}
               />
             ) : (
               group.entries.map(({ member }) => (
-                <LineagePullRequestRow key={pullRequestLabel(member)} member={member} />
+                <LineagePullRequestRow
+                  key={pullRequestLabel(member)}
+                  member={member}
+                  actions={actions}
+                />
               ))
             )
           )}
