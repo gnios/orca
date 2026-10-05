@@ -4,8 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import type { GitWorktreeInfo } from '../../../src/shared/worktree/types'
 import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
-import type { LineageDiscoverySettings } from '../../../src/shared/lineage-discovery-types'
-import type { ManualPullRequestLink } from '../../../src/shared/lineage-discovery-types'
+import type {
+  LineageDiscoverySettings,
+  ManualPullRequestLink
+} from '../../../src/shared/lineage-discovery-types'
 import type { WorkspaceKey } from '../../../src/shared/folder-workspace-types'
 import { getLineageStatus } from '../../../src/main/lineage/lineage-git-status-service'
 import { resolveLineageMembers } from '../../../src/main/lineage/lineage-member-resolver'
@@ -80,6 +82,29 @@ describe('resolveLineageMembers', () => {
       opts
     )
     expect(off.members.some((m) => m.matchedBy === 'lineage')).toBe(false)
+  })
+
+  it('flags only the tower worktree member as the tower', async () => {
+    const towerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-tower-'))
+    const childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-child-'))
+    const tower: WorkspaceKey = `worktree:r0::${towerDir}`
+    const lineage: Record<string, WorkspaceLineage> = {
+      c: {
+        childWorkspaceKey: `worktree:r1::${childDir}`,
+        parentWorkspaceKey: tower,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
+    const result = await resolveLineageMembers(
+      makeStore({ repos, lineage, settings: { patternEnabled: false } }),
+      tower,
+      { listWorktreesFn, worktreePathResolver: (id: string) => id.split('::')[1] ?? null }
+    )
+    const byPath = new Map(result.members.map((member) => [member.worktreePath, member]))
+    expect(byPath.get(path.resolve(towerDir))?.isTower).toBe(true)
+    expect(byPath.get(path.resolve(childDir))?.isTower).toBeUndefined()
   })
 
   it('matches on the worktree directory name when matchOn is worktree-name', async () => {

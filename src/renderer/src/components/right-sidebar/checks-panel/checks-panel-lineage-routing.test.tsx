@@ -59,6 +59,83 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
+const TOWER_ID = 'repo1::/w/tower'
+const towerSelf: LineageMember = {
+  repoName: 'repo1',
+  branch: 'feat/ABC-1',
+  worktreeId: TOWER_ID,
+  worktreePath: '/w/tower',
+  matchedBy: 'lineage',
+  reasons: ['this workspace']
+}
+
+describe('ChecksPanel tower routing', () => {
+  beforeEach(() => {
+    useAppStore.setState({ activeWorktreeId: TOWER_ID })
+  })
+
+  it('keeps the single panel for a self-only list flagged as the tower', () => {
+    lineage.result = { members: [{ ...towerSelf, isTower: true }], loading: false, supported: true }
+
+    renderPanel()
+
+    expect(screen.queryByTestId('lineage-checks-sections')).toBeNull()
+    expect(screen.getByText('No workspace selected')).toBeTruthy()
+  })
+
+  it('keeps the single panel for a self-only list from a host that sends no tower flag', () => {
+    lineage.result = { members: [towerSelf], loading: false, supported: true }
+
+    renderPanel()
+
+    expect(screen.queryByTestId('lineage-checks-sections')).toBeNull()
+    expect(screen.getByText('No workspace selected')).toBeTruthy()
+  })
+
+  it('renders sections for the tower plus a child', () => {
+    lineage.result = {
+      members: [{ ...towerSelf, isTower: true }, member],
+      loading: false,
+      supported: true
+    }
+
+    renderPanel()
+
+    expect(screen.getByTestId('lineage-checks-sections').textContent).toBe('2')
+  })
+
+  it('renders sections for a folder tower that has only child members', () => {
+    useAppStore.setState({ activeWorkspaceKey: 'folder:tower-1', activeWorktreeId: null })
+    lineage.result = { members: [member], loading: false, supported: true }
+
+    renderPanel()
+
+    expect(lineage.keys.at(-1)).toBe('folder:tower-1')
+    expect(screen.getByTestId('lineage-checks-sections').textContent).toBe('1')
+  })
+
+  it('renders sections for a manual-only member list', () => {
+    lineage.result = {
+      members: [
+        {
+          repoName: 'docs',
+          branch: '',
+          matchedBy: 'manual',
+          reasons: [],
+          pr: { number: 5 },
+          manualLinkId: 'm1'
+        }
+      ],
+      loading: false,
+      supported: true
+    }
+
+    renderPanel()
+
+    expect(screen.getByTestId('lineage-checks-sections').textContent).toBe('1')
+  })
+})
+
 describe('ChecksPanel lineage routing', () => {
   it('renders the single-worktree panel when the tower has no members', () => {
     renderPanel()

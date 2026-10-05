@@ -12,6 +12,24 @@ const m = (over: Partial<LineageMember>): LineageMember => ({
 })
 
 describe('mergeLineageMembers', () => {
+  it('keeps the tower flag whichever merged input carries it', () => {
+    const towerFirst = mergeLineageMembers([
+      m({ matchedBy: 'lineage', isTower: true }),
+      m({ matchedBy: 'manual', pr: { number: 3 } })
+    ])
+    const towerLast = mergeLineageMembers([
+      m({ matchedBy: 'manual', pr: { number: 3 } }),
+      m({ matchedBy: 'lineage', isTower: true })
+    ])
+    expect(towerFirst[0].isTower).toBe(true)
+    expect(towerLast[0].isTower).toBe(true)
+  })
+
+  it('never invents the tower flag', () => {
+    const merged = mergeLineageMembers([m({ matchedBy: 'pattern' }), m({ matchedBy: 'lineage' })])
+    expect(merged[0].isTower).toBeUndefined()
+  })
+
   it('keeps one row per worktree with the strongest source and all reasons', () => {
     const merged = mergeLineageMembers([
       m({ matchedBy: 'pattern', reasons: ['pattern'] }),

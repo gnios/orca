@@ -28,7 +28,8 @@ export async function resolveLineageMembers(
     worktreePath: target.worktreePath,
     worktreeId: target.worktreeId,
     matchedBy: target.matchedBy ?? 'lineage',
-    reasons: target.reasons ?? []
+    reasons: target.reasons ?? [],
+    ...(target.isTower ? { isTower: true } : {})
   }))
   const manual: LineageMember[] = (store.getLineageManualLinks?.(parentWorkspaceKey) ?? []).map(
     (link) => ({

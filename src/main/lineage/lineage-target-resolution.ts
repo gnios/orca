@@ -16,6 +16,7 @@ export type ResolvedWorktreeTarget = {
   worktreePath: string
   matchedBy?: LineageMatchSource
   reasons?: string[]
+  isTower?: boolean
 }
 
 export function resolveWorktreeTarget(
@@ -140,7 +141,12 @@ export async function resolveLineageTargets(
     )
     // invariant: the tower's own worktree is listed first so its changes show beside its children
     if (parentTarget && !knownPaths.has(parentTarget.worktreePath)) {
-      targets.unshift({ ...parentTarget, matchedBy: 'lineage', reasons: ['this workspace'] })
+      targets.unshift({
+        ...parentTarget,
+        matchedBy: 'lineage',
+        reasons: ['this workspace'],
+        isTower: true
+      })
       knownPaths.add(parentTarget.worktreePath)
     }
   }

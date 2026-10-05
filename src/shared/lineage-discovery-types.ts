@@ -41,4 +41,6 @@ export type LineageMember = {
   reasons: string[]
   pr?: LineageMemberPullRequest
   manualLinkId?: string
+  /** The workspace whose members were asked for; absent from older hosts. */
+  isTower?: boolean
 }

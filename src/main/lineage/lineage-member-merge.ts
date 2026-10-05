@@ -41,6 +41,7 @@ export function mergeLineageMembers(members: LineageMember[]): LineageMember[] {
       worktreeId: existing.worktreeId ?? member.worktreeId,
       pr: member.pr ?? existing.pr,
       manualLinkId: member.manualLinkId ?? existing.manualLinkId,
+      ...(existing.isTower || member.isTower ? { isTower: true } : {}),
       reasons: [
         ...new Set(
           stronger === member
