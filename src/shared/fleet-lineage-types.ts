@@ -15,6 +15,8 @@ export type LineageWorktreeStatus = {
   matchedBy?: LineageMatchSource
   /** Why the worktree was included; absent on payloads from older hosts. */
   reason?: string[]
+  /** Remote (SSH) worktree whose files this host could not read; absent from older hosts. */
+  unverifiable?: boolean
 }
 
 export type LineageProjectStatus = {
@@ -25,8 +27,10 @@ export type LineageProjectStatus = {
 
 export type LineageGitStatusArgs = {
   parentWorkspaceKey: string
-  /** Ticket keys (e.g. LEVGP-483) from the workspace name; absent = derive from the key. */
+  /** Legacy: older renderers sent keys; hosts that can name the tower ignore them. */
   ticketKeys?: string[]
+  /** Bypass the short-lived scan cache (explicit refresh). */
+  force?: boolean
 }
 
 export type LineageGitStatusPayload = {
@@ -35,6 +39,7 @@ export type LineageGitStatusPayload = {
   parentWorkspaceKey: string
   totalDirtyFiles: number
   projects: Record<string, LineageProjectStatus>
+  error?: string
 }
 
 export type AttachToParentArgs = {
@@ -109,7 +114,7 @@ export type LineagePullRequest = {
   url?: string
 }
 
-export type LineageGetMembersArgs = { parentWorkspaceKey: string }
+export type LineageGetMembersArgs = { parentWorkspaceKey: string; force?: boolean }
 
 export type LineageGetMembersResult = {
   status?: number

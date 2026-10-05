@@ -43,4 +43,6 @@ export type LineageMember = {
   manualLinkId?: string
   /** The workspace whose members were asked for; absent from older hosts. */
   isTower?: boolean
+  /** Remote (SSH) worktree this host cannot inspect; absent from older hosts. */
+  unverifiable?: boolean
 }

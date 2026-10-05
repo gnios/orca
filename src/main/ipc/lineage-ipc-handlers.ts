@@ -24,17 +24,17 @@ import {
   notifyWorktreeCreated,
   type LineageStoreContract
 } from '../lineage/workspace-lineage-service'
+import { commitLineageProject, getLineageFileDiff } from '../lineage/lineage-git-status-service'
 import {
-  getLineageStatus,
-  commitLineageProject,
-  getLineageFileDiff
-} from '../lineage/lineage-git-status-service'
-
-import { resolveLineageMembers } from '../lineage/lineage-member-resolver'
+  handleLineageMembersRequest,
+  handleLineageStatusRequest
+} from '../lineage/lineage-ipc-requests'
+import { createLineagePatternScanCache } from '../lineage/lineage-pattern-scan-cache'
 import { addLineageManualLink, removeLineageManualLink } from '../lineage/lineage-manual-links'
 import { testLineagePattern } from '../lineage/lineage-pattern-test'
 
 export function registerLineageIpcHandlers(store: LineageStoreContract): void {
+  const patternScanCache = createLineagePatternScanCache()
   ipcMain.removeHandler('workspace:attach-to-parent')
   ipcMain.handle(
     'workspace:attach-to-parent',
@@ -54,11 +54,8 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.removeHandler('git:lineage-get-status')
   ipcMain.handle(
     'git:lineage-get-status',
-    async (_event, args: LineageGitStatusArgs): Promise<LineageGitStatusPayload> => {
-      return getLineageStatus(store, args.parentWorkspaceKey, {
-        ticketKeys: args.ticketKeys
-      })
-    }
+    async (_event, args: LineageGitStatusArgs): Promise<LineageGitStatusPayload> =>
+      handleLineageStatusRequest(store, args, { patternScanCache })
   )
 
   ipcMain.removeHandler('git:lineage-commit-project')
@@ -82,28 +79,26 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.removeHandler('lineage:get-members')
   ipcMain.handle(
     'lineage:get-members',
-    async (_event, args: LineageGetMembersArgs): Promise<LineageGetMembersResult> => {
-      const key = typeof args?.parentWorkspaceKey === 'string' ? args.parentWorkspaceKey : ''
-      if (!key) {
-        return { status: 200, parentWorkspaceKey: key, keys: [], members: [] }
-      }
-      const resolved = await resolveLineageMembers(store, key)
-      return { status: 200, parentWorkspaceKey: key, ...resolved }
-    }
+    async (_event, args: LineageGetMembersArgs): Promise<LineageGetMembersResult> =>
+      handleLineageMembersRequest(store, args, { patternScanCache })
   )
 
   ipcMain.removeHandler('lineage:add-manual-link')
   ipcMain.handle(
     'lineage:add-manual-link',
-    async (_event, args: LineageAddManualLinkArgs): Promise<LineageAddManualLinkResult> =>
-      addLineageManualLink(store, args)
+    async (_event, args: LineageAddManualLinkArgs): Promise<LineageAddManualLinkResult> => {
+      patternScanCache.clear()
+      return addLineageManualLink(store, args)
+    }
   )
 
   ipcMain.removeHandler('lineage:remove-manual-link')
   ipcMain.handle(
     'lineage:remove-manual-link',
-    async (_event, args: LineageRemoveManualLinkArgs): Promise<LineageRemoveManualLinkResult> =>
-      removeLineageManualLink(store, args)
+    async (_event, args: LineageRemoveManualLinkArgs): Promise<LineageRemoveManualLinkResult> => {
+      patternScanCache.clear()
+      return removeLineageManualLink(store, args)
+    }
   )
 
   ipcMain.removeHandler('lineage:test-pattern')

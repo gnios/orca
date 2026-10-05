@@ -42,6 +42,7 @@ export function mergeLineageMembers(members: LineageMember[]): LineageMember[] {
       pr: member.pr ?? existing.pr,
       manualLinkId: member.manualLinkId ?? existing.manualLinkId,
       ...(existing.isTower || member.isTower ? { isTower: true } : {}),
+      ...(existing.unverifiable || member.unverifiable ? { unverifiable: true } : {}),
       reasons: [
         ...new Set(
           stronger === member

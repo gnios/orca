@@ -19,6 +19,7 @@ export type LineageStoreContract = {
   getState?(): { workspaceLineageByChildKey?: Record<string, WorkspaceLineage> }
   getRepos?(): PatternRepo[]
   getWorktree?(id: string): { path?: string; repoId?: string; branch?: string } | undefined
+  getFolderWorkspace?(id: string): { name: string } | undefined
   getSettings?(): { lineageDiscovery?: unknown }
   getLineageManualLinks?(parentKey: string): ManualPullRequestLink[]
   setLineageManualLinks?(parentKey: string, links: ManualPullRequestLink[]): void

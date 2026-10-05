@@ -11,31 +11,12 @@ import type {
 import { ActionButton } from '../listing/action-button'
 import { ProjectSourceControlScope } from './ProjectSourceControlScope'
 import { LineageOriginBadge } from '../../lineage-origin-badge'
-import { useLineageTicketKeys } from './use-lineage-ticket-keys'
 import { translate } from '@/i18n/i18n'
 
 export type LineageSourceControlProps = {
   parentWorkspaceKey?: string
   initialData?: LineageGitStatusPayload
   onOpenFileDiff?: (worktreeId: string, filePath: string, staged: boolean) => void
-}
-
-type LineageStatusGitApi = {
-  lineageGetStatus?: (args: {
-    parentWorkspaceKey: string
-    ticketKeys?: string[]
-  }) => Promise<LineageGitStatusPayload | null>
-}
-
-type WindowWithLineageStatus = Window & {
-  api?: {
-    git?: LineageStatusGitApi
-  }
-  electron?: {
-    ipcRenderer?: {
-      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
-    }
-  }
 }
 
 export function LineageSourceControl({
@@ -45,60 +26,58 @@ export function LineageSourceControl({
 }: LineageSourceControlProps): React.JSX.Element {
   const storeActiveWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const targetKey = parentWorkspaceKey ?? storeActiveWorkspaceKey ?? ''
-  const ticketKeys = useLineageTicketKeys(targetKey)
 
   const [statusData, setStatusData] = useState<LineageGitStatusPayload | null>(initialData ?? null)
   const [loading, setLoading] = useState<boolean>(!initialData)
   const [error, setError] = useState<string | null>(null)
   const [openProjects, setOpenProjects] = useState<Record<string, boolean>>({})
 
-  const fetchStatus = useCallback(async () => {
-    if (!targetKey) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    try {
-      const win = window as unknown as WindowWithLineageStatus
-      let result: LineageGitStatusPayload | null = null
-      if (win.api?.git?.lineageGetStatus) {
-        result = await win.api.git.lineageGetStatus({
-          parentWorkspaceKey: targetKey,
-          ticketKeys
-        })
-      } else if (win.electron?.ipcRenderer?.invoke) {
-        result = (await win.electron.ipcRenderer.invoke('git:lineage-get-status', {
-          parentWorkspaceKey: targetKey
-        })) as LineageGitStatusPayload | null
+  const fetchStatus = useCallback(
+    async (force = false) => {
+      if (!targetKey) {
+        setLoading(false)
+        return
       }
 
-      if (result) {
-        setStatusData(result)
-        const initialOpen: Record<string, boolean> = {}
-        if (result.projects) {
-          for (const [repoName, proj] of Object.entries(result.projects)) {
-            const hasChanges =
-              (proj.totalDirtyFiles ?? 0) > 0 ||
-              proj.worktrees.some((w) => w.dirtyFiles && w.dirtyFiles.length > 0)
-            if (hasChanges) {
-              initialOpen[repoName] = true
+      setLoading(true)
+      setError(null)
+      try {
+        const getStatus = window.api?.git?.lineageGetStatus
+        // invariant: main derives the tower keys itself, so the renderer sends only the workspace key
+        const result =
+          typeof getStatus === 'function'
+            ? await getStatus({ parentWorkspaceKey: targetKey, ...(force ? { force } : {}) })
+            : null
+
+        if (result) {
+          setStatusData(result)
+          const initialOpen: Record<string, boolean> = {}
+          if (result.projects) {
+            for (const [repoName, proj] of Object.entries(result.projects)) {
+              const hasChanges =
+                (proj.totalDirtyFiles ?? 0) > 0 ||
+                proj.worktrees.some((w) => w.dirtyFiles && w.dirtyFiles.length > 0)
+              if (hasChanges) {
+                initialOpen[repoName] = true
+              }
             }
           }
+          setOpenProjects((prev) => ({ ...initialOpen, ...prev }))
         }
-        setOpenProjects((prev) => ({ ...initialOpen, ...prev }))
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load lineage status')
+      } finally {
+        setLoading(false)
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load lineage status')
-    } finally {
-      setLoading(false)
-    }
-  }, [targetKey, ticketKeys])
+    },
+    [targetKey]
+  )
+  const refreshAll = useCallback(() => fetchStatus(true), [fetchStatus])
+  const refreshQuiet = useCallback(() => fetchStatus(), [fetchStatus])
 
   useEffect(() => {
     if (!initialData) {
-      fetchStatus()
+      void fetchStatus()
     } else {
       const initialOpen: Record<string, boolean> = {}
       if (initialData.projects) {
@@ -176,7 +155,7 @@ export function LineageSourceControl({
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 text-xs text-destructive gap-2">
         <span>{error}</span>
-        <Button variant="outline" size="sm" onClick={fetchStatus}>
+        <Button variant="outline" size="sm" onClick={refreshAll}>
           {translate('auto.components.rightSidebar.lineageSourceControl.retry', 'Retry')}
         </Button>
       </div>
@@ -231,7 +210,7 @@ export function LineageSourceControl({
                 'auto.components.rightSidebar.lineageSourceControl.refreshAll',
                 'Refresh All'
               )}
-              onClick={fetchStatus}
+              onClick={refreshAll}
             />
           </div>
         </div>
@@ -293,7 +272,7 @@ export function LineageSourceControl({
                         )}
                         onClick={(e) => {
                           e.stopPropagation()
-                          fetchStatus()
+                          void refreshAll()
                         }}
                       />
                     </div>
@@ -303,7 +282,7 @@ export function LineageSourceControl({
                 {isOpen && (
                   <ProjectSourceControlScope
                     project={project}
-                    onRefresh={fetchStatus}
+                    onRefresh={refreshQuiet}
                     onOpenFileDiff={onOpenFileDiff}
                   />
                 )}

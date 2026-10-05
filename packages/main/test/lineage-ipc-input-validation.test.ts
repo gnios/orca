@@ -5,7 +5,7 @@ import {
 } from '../../../src/main/lineage/lineage-manual-links'
 import { testLineagePattern } from '../../../src/main/lineage/lineage-pattern-test'
 import { resolveLineageMembers } from '../../../src/main/lineage/lineage-member-resolver'
-import { extractKeysWithPattern } from '../../../src/shared/lineage-ticket-keys'
+import { extractKeysWithPattern } from '../../../src/main/lineage/lineage-key-extraction'
 import type { LineageStoreContract } from '../../../src/main/lineage/workspace-lineage-service'
 
 const store: LineageStoreContract = {

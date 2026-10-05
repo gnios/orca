@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractKeysWithPattern } from '../../../src/shared/lineage-ticket-keys'
+import { extractKeysWithPattern } from '../../../src/main/lineage/lineage-key-extraction'
 
 describe('extractKeysWithPattern', () => {
   it('extracts upper-cased keys after the :: prefix', () => {

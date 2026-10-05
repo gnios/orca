@@ -3,6 +3,7 @@ import type { LineagePatternMatchOn } from '../../shared/lineage-discovery-types
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { listWorktrees } from '../git/worktree'
 import { matchesTicketKeys } from '../../shared/lineage-ticket-keys'
+import type { LineagePatternScanCache } from './lineage-pattern-scan-cache'
 
 const BRANCH_REF_PREFIX = 'refs/heads/'
 
@@ -30,6 +31,8 @@ export type DiscoverPatternTargetsArgs = {
   /** 'all' or the repo ids that may be scanned. */
   repoScope?: 'all' | string[]
   listWorktreesFn?: (repoPath: string) => Promise<GitWorktreeInfo[]>
+  patternScanCache?: LineagePatternScanCache
+  force?: boolean
 }
 
 /** Finds worktrees (primary checkouts included) across local repos whose branch carries a ticket key. */
@@ -42,7 +45,9 @@ export async function discoverPatternTargets(
     excludePaths = [],
     matchOn = 'branch',
     repoScope = 'all',
-    listWorktreesFn = listWorktrees
+    listWorktreesFn = listWorktrees,
+    patternScanCache,
+    force
   } = args
   if (keys.length === 0) {
     return []
@@ -57,11 +62,17 @@ export async function discoverPatternTargets(
       async (
         repo
       ): Promise<{ repo: (typeof localRepos)[number]; worktrees: GitWorktreeInfo[] }> => {
-        try {
-          return { repo, worktrees: await listWorktreesFn(repo.path) }
-        } catch {
-          return { repo, worktrees: [] }
+        const load = async (): Promise<GitWorktreeInfo[]> => {
+          try {
+            return await listWorktreesFn(repo.path)
+          } catch {
+            return []
+          }
         }
+        const worktrees = patternScanCache
+          ? await patternScanCache.getOrLoad(repo.path, load, force)
+          : await load()
+        return { repo, worktrees }
       }
     )
   )

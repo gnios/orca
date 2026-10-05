@@ -162,12 +162,25 @@ describe('LineageSourceControl', () => {
     expect(container.textContent).toContain('No changes across lineage worktrees')
   })
 
-  it('sends the ticket key from the folder name when fetching status', async () => {
+  // why: main derives the tower keys from the store, so the renderer no longer sends ticketKeys
+  it('sends only the workspace key, and force on Refresh All', async () => {
     const lineageGetStatus = vi.fn().mockResolvedValue({
       parentKey: 'folder:control-tower',
       parentWorkspaceKey: 'folder:control-tower',
-      totalDirtyFiles: 0,
-      projects: {}
+      totalDirtyFiles: 1,
+      projects: {
+        api: {
+          repoName: 'api',
+          worktrees: [
+            {
+              worktreeId: 'api::/w/api',
+              worktreePath: '/w/api',
+              branch: 'b',
+              dirtyFiles: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]
+            }
+          ]
+        }
+      }
     })
     Reflect.set(window, 'api', { git: { lineageGetStatus } })
 
@@ -175,9 +188,13 @@ describe('LineageSourceControl', () => {
       root.render(<LineageSourceControl parentWorkspaceKey="folder:control-tower" />)
     })
 
-    expect(lineageGetStatus).toHaveBeenCalledWith({
+    expect(lineageGetStatus).toHaveBeenCalledWith({ parentWorkspaceKey: 'folder:control-tower' })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Refresh All"]')?.click()
+    })
+    expect(lineageGetStatus).toHaveBeenLastCalledWith({
       parentWorkspaceKey: 'folder:control-tower',
-      ticketKeys: ['LEVGP-483']
+      force: true
     })
     Reflect.deleteProperty(window, 'api')
   })

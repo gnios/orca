@@ -9,6 +9,7 @@ import {
   writeDataFile
 } from '../../persistence-test-harness'
 import { DEFAULT_LINEAGE_DISCOVERY } from '../../../shared/lineage-discovery-types'
+import { normalizeManualLinks } from './normalize-loaded-profile-state'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -70,6 +71,19 @@ describe('lineage manual links and discovery settings persistence', () => {
     })
     const reloaded = await createStore()
     expect(reloaded.getLineageManualLinks(PARENT)).toEqual([good])
+  })
+
+  it('drops entries whose parent key is not a workspace key', () => {
+    const link = { id: 'ok', repoName: 'r', number: 3, addedAt: 2 }
+    expect(
+      normalizeManualLinks({
+        [PARENT]: [link],
+        'folder:f1': [link],
+        'r1::/w/a': [link],
+        'worktree:': [link],
+        bogus: [link]
+      })
+    ).toEqual({ [PARENT]: [link], 'folder:f1': [link] })
   })
 
   it('defaults and persists lineageDiscovery settings', async () => {

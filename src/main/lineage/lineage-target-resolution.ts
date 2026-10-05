@@ -3,10 +3,11 @@ import path from 'node:path'
 import { splitWorktreeId, WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { LineageMatchSource } from '../../shared/lineage-discovery-types'
-import { extractKeysWithPattern } from '../../shared/lineage-ticket-keys'
 import { getDefaultWorkspacesRoot } from './workspaces-fs-watcher'
 import { resolveEffectiveDiscoverySettings } from './lineage-discovery-settings'
 import { discoverPatternTargets } from './lineage-name-pattern-discovery'
+import { deriveTowerKeys } from './lineage-tower-name'
+import type { LineagePatternScanCache } from './lineage-pattern-scan-cache'
 import type { LineageStoreContract } from './workspace-lineage-service'
 
 export type ResolvedWorktreeTarget = {
@@ -17,6 +18,8 @@ export type ResolvedWorktreeTarget = {
   matchedBy?: LineageMatchSource
   reasons?: string[]
   isTower?: boolean
+  /** hazard: remote (SSH) worktree; this host cannot check its files. */
+  unverifiable?: boolean
 }
 
 export function resolveWorktreeTarget(
@@ -71,12 +74,23 @@ export function resolveWorktreeTarget(
     }
   }
 
+  // invariant: one repository, one name, so Source Control groups lineage and pattern worktrees together
+  const registered = store.getRepos?.().find((repo) => repo.id === repoName)
+
+  // hazard: a remote worktree's path lives on its SSH host; local fs absence is not evidence it is gone
+  if (registered?.connectionId && candidatePath) {
+    return {
+      worktreeId,
+      repoName: registered.displayName,
+      branchHint,
+      worktreePath: candidatePath,
+      unverifiable: true
+    }
+  }
+
   if (!candidatePath || !fs.existsSync(candidatePath)) {
     return null
   }
-
-  // invariant: one repository, one name, so Source Control groups lineage and pattern worktrees together
-  const registered = store.getRepos?.().find((repo) => repo.id === repoName)
 
   return {
     worktreeId,
@@ -89,8 +103,10 @@ export function resolveWorktreeTarget(
 export type ResolveLineageTargetsOptions = {
   worktreePathResolver?: (worktreeId: string, repoName: string, branch: string) => string | null
   listWorktreesFn?: (repoPath: string) => Promise<GitWorktreeInfo[]>
-  /** Renderer-provided keys; override extraction from the workspace name. */
-  ticketKeys?: string[]
+  /** Keys from older renderers; used only when this host cannot name the tower itself. */
+  ticketKeys?: unknown
+  patternScanCache?: LineagePatternScanCache
+  force?: boolean
 }
 
 export type ResolvedLineageTargets = {
@@ -106,8 +122,8 @@ export async function resolveLineageTargets(
   options: ResolveLineageTargetsOptions = {}
 ): Promise<ResolvedLineageTargets> {
   const settings = resolveEffectiveDiscoverySettings(store.getSettings?.().lineageDiscovery)
-  const extracted = extractKeysWithPattern(parentWorkspaceKey, settings.keyRegex)
-  const keys = options.ticketKeys?.filter(Boolean) ?? extracted.keys
+  const derived = await deriveTowerKeys(store, parentWorkspaceKey, settings, options)
+  const keys = derived.keys
   const targets: ResolvedWorktreeTarget[] = []
   const knownPaths = new Set<string>()
 
@@ -134,21 +150,20 @@ export async function resolveLineageTargets(
         knownPaths.add(target.worktreePath)
       }
     }
-    const parentTarget = resolveWorktreeTarget(
-      parentWorkspaceKey,
-      store,
-      options.worktreePathResolver
-    )
-    // invariant: the tower's own worktree is listed first so its changes show beside its children
-    if (parentTarget && !knownPaths.has(parentTarget.worktreePath)) {
-      targets.unshift({
-        ...parentTarget,
-        matchedBy: 'lineage',
-        reasons: ['this workspace'],
-        isTower: true
-      })
-      knownPaths.add(parentTarget.worktreePath)
-    }
+  }
+
+  const parentTarget = parentWorkspaceKey.startsWith('folder:')
+    ? null
+    : resolveWorktreeTarget(parentWorkspaceKey, store, options.worktreePathResolver)
+  // invariant: the tower's own worktree is always listed first so its changes show beside its children
+  if (parentTarget && !knownPaths.has(parentTarget.worktreePath)) {
+    targets.unshift({
+      ...parentTarget,
+      matchedBy: 'lineage',
+      reasons: ['this workspace'],
+      isTower: true
+    })
+    knownPaths.add(parentTarget.worktreePath)
   }
 
   if (settings.patternEnabled) {
@@ -158,7 +173,9 @@ export async function resolveLineageTargets(
       excludePaths: [...knownPaths],
       matchOn: settings.matchOn,
       repoScope: settings.repoScope,
-      listWorktreesFn: options.listWorktreesFn
+      listWorktreesFn: options.listWorktreesFn,
+      patternScanCache: options.patternScanCache,
+      force: options.force
     })
     for (const found of patternTargets) {
       targets.push({
@@ -173,5 +190,5 @@ export async function resolveLineageTargets(
     }
   }
 
-  return extracted.error ? { targets, keys, patternError: extracted.error } : { targets, keys }
+  return derived.error ? { targets, keys, patternError: derived.error } : { targets, keys }
 }

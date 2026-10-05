@@ -1,5 +1,3 @@
-import { DEFAULT_KEY_REGEX } from './lineage-discovery-types'
-
 const TICKET_KEY = /[A-Za-z][A-Za-z0-9]{1,9}-\d+/g
 
 export function extractTicketKeys(text: string): string[] {
@@ -37,29 +35,3 @@ export function matchesTicketKeys(name: string, keys: string[]): boolean {
 
 export const MAX_KEY_REGEX_LENGTH = 200
 export const MAX_TOWER_NAME_LENGTH = 500
-
-export function extractKeysWithPattern(
-  text: string,
-  keyRegex: string
-): { keys: string[]; error?: string } {
-  let pattern: RegExp
-  let error: string | undefined
-  try {
-    if (keyRegex.length > MAX_KEY_REGEX_LENGTH) {
-      throw new Error('key pattern too long')
-    }
-    pattern = new RegExp(keyRegex, 'g')
-  } catch {
-    pattern = new RegExp(DEFAULT_KEY_REGEX, 'g')
-    error = `Invalid key pattern, using the default: ${keyRegex.slice(0, MAX_KEY_REGEX_LENGTH)}`
-  }
-  const target = text.includes('::') ? text.split('::').slice(1).join('::') : text
-  const keys = new Set<string>()
-  for (const match of target.matchAll(pattern)) {
-    // invariant: a regex may match "", and an empty key would match every branch
-    if (match[0]) {
-      keys.add(match[0].toUpperCase())
-    }
-  }
-  return error ? { keys: [...keys], error } : { keys: [...keys] }
-}

@@ -89,6 +89,21 @@ export async function getLineageStatus(
     targets,
     concurrencyLimit,
     async (target): Promise<{ repoName: string; status: LineageWorktreeStatus }> => {
+      // hazard: local git cannot read a remote worktree; report it as unverifiable, never as clean or gone
+      if (target.unverifiable) {
+        return {
+          repoName: target.repoName,
+          status: {
+            worktreeId: target.worktreeId,
+            worktreePath: target.worktreePath,
+            branch: target.branchHint,
+            dirtyFiles: [],
+            matchedBy: target.matchedBy,
+            reason: target.reasons,
+            unverifiable: true
+          }
+        }
+      }
       try {
         const res = await statusRunner(target.worktreePath)
         const branch = res.branch || res.head || target.branchHint

@@ -5,6 +5,7 @@ import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-dif
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
 import type { ManualPullRequestLink } from '../../../shared/lineage-discovery-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -127,18 +128,20 @@ function isManualLink(value: unknown): value is ManualPullRequestLink {
   )
 }
 
-function normalizeManualLinks(value: unknown): Record<WorkspaceKey, ManualPullRequestLink[]> {
+export function normalizeManualLinks(
+  value: unknown
+): Record<WorkspaceKey, ManualPullRequestLink[]> {
   const normalized: Record<WorkspaceKey, ManualPullRequestLink[]> = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return normalized
   }
   for (const [key, links] of Object.entries(value)) {
-    if (!Array.isArray(links)) {
+    if (!isWorkspaceKey(key) || !Array.isArray(links)) {
       continue
     }
     const valid = links.filter(isManualLink)
     if (valid.length > 0) {
-      normalized[key as WorkspaceKey] = valid
+      normalized[key] = valid
     }
   }
   return normalized
