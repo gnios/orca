@@ -391,7 +391,7 @@ export function ProjectSourceControlScope({
 
           <Button
             size="sm"
-            className="w-full mt-2 h-7 text-xs gap-1.5 font-medium"
+            className="w-full mt-2"
             disabled={!commitMessage.trim() || isCommitting}
             onClick={handleCommit}
             data-testid={`commit-button-${project.repoName}`}
