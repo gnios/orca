@@ -38,6 +38,9 @@ import { useChecksPanelCreateReview } from './checks-panel/use-checks-panel-crea
 import { ChecksPanelEmptyContent } from './checks-panel/empty-content'
 import { ChecksPanelActiveContent } from './checks-panel/active-content'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { useAppStore } from '@/store'
+import { useLineageMembers } from './lineage-members/use-lineage-members'
+import { LineageChecksSections } from './checks-panel/LineageChecksSections'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -147,7 +150,7 @@ export function ChecksPanelReviewHeader({
   )
 }
 
-export default function ChecksPanel(): React.JSX.Element {
+export function SingleWorktreeChecksPanel(): React.JSX.Element {
   const baseModel = useChecksPanelControllerState()
   const contextModel = Object.assign(baseModel, useChecksPanelContextState(baseModel))
   const reviewModel = Object.assign(contextModel, useChecksPanelReviewState(contextModel))
@@ -188,4 +191,13 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   return <ChecksPanelActiveContent model={model} ReviewHeaderComponent={ChecksPanelReviewHeader} />
+}
+
+export default function ChecksPanel(): React.JSX.Element {
+  const towerKey = useAppStore((s) => s.activeWorkspaceKey ?? s.activeWorktreeId)
+  const { members, supported } = useLineageMembers(towerKey)
+  if (supported && members.length > 0) {
+    return <LineageChecksSections members={members} PanelComponent={SingleWorktreeChecksPanel} />
+  }
+  return <SingleWorktreeChecksPanel />
 }
