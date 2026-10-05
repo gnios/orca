@@ -6,6 +6,7 @@ import type { GitStatusResult } from '../../../src/shared/git-status-types'
 import type { GitWorktreeInfo } from '../../../src/shared/worktree/types'
 import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
 import { getLineageStatus } from '../../../src/main/lineage/lineage-git-status-service'
+import type { PatternRepo } from '../../../src/main/lineage/lineage-name-pattern-discovery'
 import type { LineageStoreContract } from '../../../src/main/lineage/workspace-lineage-service'
 
 const gitStatusFn = async (): Promise<GitStatusResult> => ({
@@ -15,12 +16,14 @@ const gitStatusFn = async (): Promise<GitStatusResult> => ({
   entries: [{ path: 'a.py', status: 'modified', area: 'unstaged' }]
 })
 
-function makeStore(extra: Partial<LineageStoreContract> & { repos?: unknown[] } = {}) {
+function makeStore(
+  extra: Partial<LineageStoreContract> & { repos?: PatternRepo[] } = {}
+): LineageStoreContract {
   return {
     getAllWorkspaceLineage: (): Record<string, WorkspaceLineage> => ({}),
     getRepos: () => extra.repos ?? [],
     ...extra
-  } as LineageStoreContract
+  }
 }
 
 describe('getLineageStatus with name-pattern discovery', () => {

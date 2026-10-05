@@ -135,6 +135,7 @@ export async function resolveLineageTargets(
       store,
       options.worktreePathResolver
     )
+    // invariant: the tower's own worktree is listed first so its changes show beside its children
     if (parentTarget && !knownPaths.has(parentTarget.worktreePath)) {
       targets.unshift({ ...parentTarget, matchedBy: 'lineage', reasons: ['this workspace'] })
       knownPaths.add(parentTarget.worktreePath)

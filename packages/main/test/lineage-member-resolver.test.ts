@@ -6,11 +6,13 @@ import type { GitWorktreeInfo } from '../../../src/shared/worktree/types'
 import type { WorkspaceLineage } from '../../../src/shared/worktree/lineage-types'
 import type { LineageDiscoverySettings } from '../../../src/shared/lineage-discovery-types'
 import type { ManualPullRequestLink } from '../../../src/shared/lineage-discovery-types'
+import type { WorkspaceKey } from '../../../src/shared/folder-workspace-types'
+import { getLineageStatus } from '../../../src/main/lineage/lineage-git-status-service'
 import { resolveLineageMembers } from '../../../src/main/lineage/lineage-member-resolver'
 import { resolveEffectiveDiscoverySettings } from '../../../src/main/lineage/lineage-discovery-settings'
 import type { LineageStoreContract } from '../../../src/main/lineage/workspace-lineage-service'
 
-const PARENT = 'worktree:r0::/o/tower/levgp-483-new-loan'
+const PARENT: WorkspaceKey = 'worktree:r0::/o/tower/levgp-483-new-loan'
 
 type Repo = { id: string; path: string; displayName: string; connectionId?: string | null }
 
@@ -55,7 +57,7 @@ describe('resolveLineageMembers', () => {
 
   it('honours lineageEnabled:false', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-lineage-'))
-    const lineage = {
+    const lineage: Record<string, WorkspaceLineage> = {
       c: {
         childWorkspaceKey: `worktree:r1::${dir}`,
         parentWorkspaceKey: PARENT,
@@ -63,7 +65,7 @@ describe('resolveLineageMembers', () => {
         capture: { source: 'manual-action', confidence: 'explicit' },
         createdAt: 0
       }
-    } as unknown as Record<string, WorkspaceLineage>
+    }
     const noPattern = { patternEnabled: false }
     const store = (settings: object) => makeStore({ repos, lineage, settings })
     const opts = {
@@ -197,5 +199,73 @@ describe('resolveEffectiveDiscoverySettings', () => {
     expect(
       resolveEffectiveDiscoverySettings({ matchOn: 'both', repoScope: ['a'], keyRegex: 'X-\\d+' })
     ).toMatchObject({ matchOn: 'both', repoScope: ['a'], keyRegex: 'X-\\d+' })
+  })
+})
+
+describe('getLineageStatus parent workspace', () => {
+  const gitStatusFn = async () => ({
+    branch: 'b',
+    head: 'h',
+    conflictOperation: 'unknown' as const,
+    entries: []
+  })
+  const noPattern = { patternEnabled: false }
+
+  it('lists the tower worktree first as lineage, once, when it exists on disk', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-parent-'))
+    const parentKey: WorkspaceKey = `worktree:r0::${dir}`
+    const store = makeStore({ repos: [repos[0]], settings: noPattern })
+    const payload = await getLineageStatus(store, parentKey, { gitStatusFn })
+    const all = Object.values(payload.projects).flatMap((project) => project.worktrees)
+    expect(all).toHaveLength(1)
+    expect(all[0]).toMatchObject({ worktreePath: dir, matchedBy: 'lineage' })
+  })
+
+  it('does not duplicate the tower when a child or pattern match has the same path', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-parent-'))
+    const parentKey: WorkspaceKey = `worktree:r0::${dir}`
+    const lineage: Record<string, WorkspaceLineage> = {
+      c: {
+        childWorkspaceKey: parentKey,
+        parentWorkspaceKey: parentKey,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
+    const store = makeStore({ repos: [{ ...repos[0], path: dir }], lineage })
+    const payload = await getLineageStatus(store, parentKey, {
+      gitStatusFn,
+      ticketKeys: ['LEVGP-483'],
+      listWorktreesFn: async () => [wt(dir, 'refs/heads/feature/levgp-483-x')]
+    })
+    expect(Object.values(payload.projects).flatMap((project) => project.worktrees)).toHaveLength(1)
+  })
+
+  it('omits the tower when its path does not exist', async () => {
+    const store = makeStore({ repos: [], settings: noPattern })
+    const payload = await getLineageStatus(store, 'worktree:r0::/definitely/not/here', {
+      gitStatusFn
+    })
+    expect(payload.projects).toEqual({})
+  })
+})
+
+describe('getLineageStatus shares the resolver', () => {
+  it('emits matchedBy and reason and leaves out worktree-less manual members', async () => {
+    const links = [{ id: 'l1', repoName: 'ghost', number: 7, addedAt: 1 }]
+    const payload = await getLineageStatus(makeStore({ repos: [repos[0]], links }), PARENT, {
+      listWorktreesFn,
+      gitStatusFn: async () => ({
+        branch: 'b',
+        head: 'h',
+        conflictOperation: 'unknown',
+        entries: []
+      })
+    })
+    const all = Object.values(payload.projects).flatMap((project) => project.worktrees)
+    expect(all).toHaveLength(1)
+    expect(all[0]).toMatchObject({ matchedBy: 'pattern', reason: ['branch matches LEVGP-483'] })
+    expect(payload.projects.ghost).toBeUndefined()
   })
 })
