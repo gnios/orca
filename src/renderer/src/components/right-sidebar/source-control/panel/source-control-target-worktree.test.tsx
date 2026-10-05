@@ -15,7 +15,9 @@ const recorded = vi.hoisted(() => {
   const refreshes: RefreshCall[] = []
   const stages: GitCall[] = []
   const commits: GitCall[] = []
-  return { refreshes, stages, commits }
+  const discards: GitCall[] = []
+  const pushes: GitCall[] = []
+  return { refreshes, stages, commits, discards, pushes }
 })
 
 vi.mock('../../git-status-refresh', () => ({
@@ -28,6 +30,9 @@ vi.mock('@/runtime/runtime-git-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   stageRuntimeGitPath: vi.fn(async (context: GitCall) => {
     recorded.stages.push({ worktreeId: context.worktreeId, worktreePath: context.worktreePath })
+  }),
+  discardRuntimeGitPath: vi.fn(async (context: GitCall) => {
+    recorded.discards.push({ worktreeId: context.worktreeId, worktreePath: context.worktreePath })
   }),
   commitRuntimeGit: vi.fn(async (context: GitCall) => {
     recorded.commits.push({ worktreeId: context.worktreeId, worktreePath: context.worktreePath })
@@ -85,6 +90,8 @@ beforeEach(() => {
   recorded.refreshes.length = 0
   recorded.stages.length = 0
   recorded.commits.length = 0
+  recorded.discards.length = 0
+  recorded.pushes.length = 0
   installInertApi()
   useAppStore.setState(initialAppState, true)
   useAppStore.setState({
@@ -93,7 +100,10 @@ beforeEach(() => {
     repos: [{ ...TEST_REPO, kind: 'git', connectionId: null }],
     gitStatusByWorktree: { [worktreeA.id]: [unstagedOnA], [worktreeB.id]: [stagedOnB] },
     rightSidebarOpen: true,
-    rightSidebarTab: 'source-control'
+    rightSidebarTab: 'source-control',
+    pushBranch: async (worktreeId: string, worktreePath: string) => {
+      recorded.pushes.push({ worktreeId, worktreePath })
+    }
   })
 })
 
@@ -111,7 +121,7 @@ describe('source control target worktree', () => {
     expect(result.current.isBranchVisible).toBe(true)
   })
 
-  it('reads, refreshes, stages and commits the target worktree, never the active one', async () => {
+  it('reads, refreshes, stages, commits, discards and pushes the target worktree, never the active one', async () => {
     const { result } = renderHook(() => useSourceControlPanelModel(), {
       wrapper: targetWrapper(worktreeB, true)
     })
@@ -128,9 +138,24 @@ describe('source control target worktree', () => {
       await result.current.handleCommit('message')
     })
 
+    await act(async () => {
+      await result.current.discardSingle('b.ts')
+    })
+    await act(async () => {
+      await result.current.runRemoteAction('push')
+    })
+
     expect(recorded.stages).toEqual([{ worktreeId: worktreeB.id, worktreePath: '/repo1-b' }])
+    expect(recorded.discards).toEqual([{ worktreeId: worktreeB.id, worktreePath: '/repo1-b' }])
+    expect(recorded.pushes).toEqual([{ worktreeId: worktreeB.id, worktreePath: '/repo1-b' }])
     expect(recorded.commits).toEqual([{ worktreeId: worktreeB.id, worktreePath: '/repo1-b' }])
-    const touched = [...recorded.refreshes, ...recorded.stages, ...recorded.commits]
+    const touched = [
+      ...recorded.refreshes,
+      ...recorded.stages,
+      ...recorded.commits,
+      ...recorded.discards,
+      ...recorded.pushes
+    ]
     expect(touched.every((call) => call.worktreeId === worktreeB.id)).toBe(true)
     expect(useAppStore.getState().gitStatusByWorktree[worktreeA.id]).toEqual([unstagedOnA])
   })

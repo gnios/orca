@@ -56,6 +56,10 @@ function entryFailureTitle(
   }
 }
 
+function isStoreActiveWorktree(worktreeId: string | null): boolean {
+  return useAppStore.getState().activeWorktreeId === worktreeId
+}
+
 /**
  * Per-row stage/unstage/discard failure. Bulk callers aggregate their own failures into one toast
  * instead — see `reportBulkMutationFailure` and the discard-all summary in `use-discard-confirmation`.
@@ -64,10 +68,6 @@ function entryFailureTitle(
  * this exists to remove — but it names that worktree and offers no action, because every recovery
  * affordance here is bound to the repo the attempt ran against.
  */
-function isStoreActiveWorktree(worktreeId: string | null): boolean {
-  return useAppStore.getState().activeWorktreeId === worktreeId
-}
-
 export function showSourceControlEntryFailureToast({
   operation,
   filePath,

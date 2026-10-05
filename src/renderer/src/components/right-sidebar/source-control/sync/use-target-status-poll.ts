@@ -16,7 +16,10 @@ export function useSourceControlTargetStatusPoll({
 }: {
   activeConnectionId: string | null
   isBranchVisible: boolean
-  refreshActiveGitStatus: () => Promise<void>
+  refreshActiveGitStatus: (
+    signal?: AbortSignal,
+    admissionTier?: 'interactive' | 'status'
+  ) => Promise<void>
 }): void {
   const target = useSourceControlTargetWorktree()
   const storeActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -38,13 +41,29 @@ export function useSourceControlTargetStatusPoll({
     if (!enabled) {
       return
     }
-    return installWindowVisibilityInterval({
+    const controller = new AbortController()
+    let inFlight = false
+    const stopInterval = installWindowVisibilityInterval({
       run: () => {
-        void refreshRef.current().catch((error) => {
-          console.warn('[SourceControl] lineage member git status refresh failed', error)
-        })
+        // why: a slow status scan must not stack a second git process behind it
+        if (inFlight || controller.signal.aborted) {
+          return
+        }
+        inFlight = true
+        void refreshRef
+          .current(controller.signal, 'status')
+          .catch((error) => {
+            console.warn('[SourceControl] lineage member git status refresh failed', error)
+          })
+          .finally(() => {
+            inFlight = false
+          })
       },
       intervalMs: TARGET_STATUS_INTERVAL_MS
     })
+    return () => {
+      stopInterval()
+      controller.abort()
+    }
   }, [enabled, targetWorktreeId])
 }
