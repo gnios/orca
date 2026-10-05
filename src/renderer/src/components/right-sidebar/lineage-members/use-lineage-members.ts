@@ -27,47 +27,52 @@ export function useLineageMembers(parentWorkspaceKey: string | null): UseLineage
   const [loading, setLoading] = useState(false)
   const requestSeqRef = useRef(0)
 
-  const refresh = useCallback(async (): Promise<void> => {
-    const requestSeq = ++requestSeqRef.current
-    const getMembers = window.api?.git?.lineageGetMembers
-    if (!parentWorkspaceKey || typeof getMembers !== 'function') {
-      setState({
-        key: parentWorkspaceKey,
-        members: NO_MEMBERS,
-        supported: false
-      })
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    try {
-      const result = await getMembers({ parentWorkspaceKey })
-      if (requestSeq === requestSeqRef.current) {
-        setState({
-          key: parentWorkspaceKey,
-          members: result?.members ?? NO_MEMBERS,
-          supported: true
-        })
-      }
-    } catch {
-      // why: older hosts have no lineage handler; the caller falls back to the single panel silently
-      if (requestSeq === requestSeqRef.current) {
+  const load = useCallback(
+    async (force: boolean): Promise<void> => {
+      const requestSeq = ++requestSeqRef.current
+      const getMembers = window.api?.git?.lineageGetMembers
+      if (!parentWorkspaceKey || typeof getMembers !== 'function') {
         setState({
           key: parentWorkspaceKey,
           members: NO_MEMBERS,
           supported: false
         })
-      }
-    } finally {
-      if (requestSeq === requestSeqRef.current) {
         setLoading(false)
+        return
       }
-    }
-  }, [parentWorkspaceKey])
+      setLoading(true)
+      try {
+        const result = await getMembers({ parentWorkspaceKey, ...(force ? { force } : {}) })
+        if (requestSeq === requestSeqRef.current) {
+          setState({
+            key: parentWorkspaceKey,
+            members: result?.members ?? NO_MEMBERS,
+            supported: true
+          })
+        }
+      } catch {
+        // why: older hosts have no lineage handler; the caller falls back to the single panel silently
+        if (requestSeq === requestSeqRef.current) {
+          setState({
+            key: parentWorkspaceKey,
+            members: NO_MEMBERS,
+            supported: false
+          })
+        }
+      } finally {
+        if (requestSeq === requestSeqRef.current) {
+          setLoading(false)
+        }
+      }
+    },
+    [parentWorkspaceKey]
+  )
+  // invariant: an explicit refresh bypasses main's short-lived scan cache; mount/lineage changes may reuse it
+  const refresh = useCallback(() => load(true), [load])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh, workspaceLineageByChildKey])
+    void load(false)
+  }, [load, workspaceLineageByChildKey])
 
   // invariant: members fetched for a previous workspace are never shown for the current one
   const isCurrent = state.key === parentWorkspaceKey

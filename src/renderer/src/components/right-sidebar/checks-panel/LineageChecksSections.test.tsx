@@ -75,6 +75,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('LineageChecksSections', () => {
+  it('labels a GitLab merge request !n and an unknown provider #n', () => {
+    const gitlab: LineageMember[] = [
+      { ...members[0], pr: { number: 12, provider: 'gitlab' } },
+      { ...members[1], pr: { number: 7 } }
+    ]
+    render(<LineageChecksSections members={gitlab} PanelComponent={StubPanel} />)
+    const sections = screen.getAllByTestId(/^lineage-checks-section-/)
+    expect(within(sections[0]).getByText('!12')).toBeTruthy()
+    expect(within(sections[1]).getByText('#7')).toBeTruthy()
+  })
+
   it('renders one collapse per repository in member order with only the first expanded', () => {
     render(<LineageChecksSections members={members} PanelComponent={StubPanel} />)
 

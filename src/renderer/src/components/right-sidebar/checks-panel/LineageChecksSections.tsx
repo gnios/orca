@@ -8,7 +8,10 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { LineageMember } from '../../../../../shared/lineage-discovery-types'
+import type {
+  LineageMember,
+  LineageMemberPullRequest
+} from '../../../../../shared/lineage-discovery-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { LineageOriginBadge } from '../lineage-origin-badge'
 import { AddManualPullRequest } from '../lineage-members/AddManualPullRequest'
@@ -54,8 +57,12 @@ function groupByRepo(
   return [...groups.values()]
 }
 
+function pullRequestNumberLabel(pr: LineageMemberPullRequest): string {
+  return pr.provider === 'gitlab' ? `!${pr.number}` : `#${pr.number}`
+}
+
 function pullRequestLabel(member: LineageMember): string {
-  return member.pr ? `${member.repoName}#${member.pr.number}` : member.repoName
+  return member.pr ? `${member.repoName}${pullRequestNumberLabel(member.pr)}` : member.repoName
 }
 
 function ManualRemoveButton({
@@ -137,7 +144,7 @@ function LineageChecksSection({
   actions?: ManualLinkActions
 }): React.JSX.Element {
   const lead = group.entries.find((entry) => entry.worktree !== null) ?? group.entries[0]
-  const prNumber = group.entries.find((entry) => entry.member.pr)?.member.pr?.number
+  const pr = group.entries.find((entry) => entry.member.pr)?.member.pr
   const worktreeCount = group.entries.filter((entry) => entry.worktree !== null).length
   return (
     <Collapsible
@@ -171,9 +178,9 @@ function LineageChecksSection({
                   ({lead.member.branch})
                 </span>
               ) : null}
-              {prNumber !== undefined ? (
+              {pr ? (
                 <span className="ml-auto shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
-                  #{prNumber}
+                  {pullRequestNumberLabel(pr)}
                 </span>
               ) : null}
             </span>

@@ -8,6 +8,27 @@ const TEST_DEBOUNCE_MS = 300
 // why: the IPC rejects an empty tower name, but validating the regex alone still needs a probe
 const REGEX_PROBE_NAME = 'probe'
 
+async function validateKeyRegex(keyRegex: string): Promise<string | null> {
+  const testPattern = window.api?.git?.lineageTestPattern
+  if (typeof testPattern === 'function') {
+    try {
+      const result = await testPattern({ towerName: REGEX_PROBE_NAME, keyRegex })
+      return result.error ?? null
+    } catch {
+      // why: hosts without the lineage IPC fall through to the local syntax check below
+    }
+  }
+  try {
+    new RegExp(keyRegex)
+    return null
+  } catch {
+    return translate(
+      'auto.components.settings.lineageDiscovery.keyPatternInvalid',
+      'Invalid key pattern'
+    )
+  }
+}
+
 type LineagePatternTesterProps = {
   savedKeyRegex: string
   disabled: boolean
@@ -52,7 +73,6 @@ export function LineagePatternTester({
       const testPattern = window.api?.git?.lineageTestPattern
       if (typeof testPattern !== 'function') {
         setSupported(false)
-        onValidKeyRegex(regexDraft)
         return
       }
       testPattern({
@@ -65,9 +85,6 @@ export function LineagePatternTester({
           }
           setRegexError(result.error ?? null)
           setKeys(towerName ? result.keys : null)
-          if (!result.error && regexDraft !== savedKeyRegex) {
-            onValidKeyRegex(regexDraft)
-          }
         })
         .catch(() => {
           if (!cancelled) {
@@ -79,7 +96,21 @@ export function LineagePatternTester({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [regexDraft, towerName, savedKeyRegex, onValidKeyRegex])
+  }, [regexDraft, towerName, savedKeyRegex])
+
+  // why: saving on every keystroke would persist half-typed patterns; commit only on blur/Enter once valid
+  const commitDraft = async (): Promise<void> => {
+    const draft = regexDraft
+    if (draft === '' || draft === savedKeyRegex) {
+      return
+    }
+    const error = await validateKeyRegex(draft)
+    if (error === null) {
+      onValidKeyRegex(draft)
+    } else {
+      setRegexError(error)
+    }
+  }
 
   return (
     <>
@@ -102,6 +133,13 @@ export function LineagePatternTester({
               )}
               aria-invalid={regexError !== null}
               onChange={(event) => setRegexDraft(event.target.value)}
+              onBlur={() => void commitDraft()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void commitDraft()
+                }
+              }}
             />
             {regexError ? (
               <p data-testid="lineage-key-regex-error" className="text-xs text-destructive">

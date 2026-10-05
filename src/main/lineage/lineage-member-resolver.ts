@@ -1,10 +1,16 @@
-import type { LineageMember } from '../../shared/lineage-discovery-types'
+import type { LineageMember, LineageMemberPullRequest } from '../../shared/lineage-discovery-types'
+import { parsePullRequestReference } from '../../shared/lineage-pr-reference'
 import {
   resolveLineageTargets,
   type ResolveLineageTargetsOptions
 } from './lineage-target-resolution'
 import { mergeLineageMembers } from './lineage-member-merge'
 import type { LineageStoreContract } from './workspace-lineage-service'
+
+function providerOf(url: string | undefined): Pick<LineageMemberPullRequest, 'provider'> {
+  const provider = url ? parsePullRequestReference(url)?.provider : undefined
+  return provider ? { provider } : {}
+}
 
 export type ResolvedLineageMembers = {
   members: LineageMember[]
@@ -37,7 +43,11 @@ export async function resolveLineageMembers(
       repoName: link.repoName,
       branch: '',
       matchedBy: 'manual',
-      pr: { number: link.number, ...(link.url ? { url: link.url } : {}) },
+      pr: {
+        number: link.number,
+        ...(link.url ? { url: link.url } : {}),
+        ...providerOf(link.url)
+      },
       manualLinkId: link.id,
       reasons: ['added manually']
     })

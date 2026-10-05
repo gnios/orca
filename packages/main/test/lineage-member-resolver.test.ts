@@ -170,6 +170,24 @@ describe('resolveLineageMembers', () => {
     ])
   })
 
+  it('tags manual PRs with the provider of their URL and leaves repo#n neutral', async () => {
+    const links = [
+      {
+        id: 'g',
+        repoName: 'a',
+        number: 4,
+        url: 'https://gitlab.com/g/a/-/merge_requests/4',
+        addedAt: 1
+      },
+      { id: 'h', repoName: 'b', number: 5, url: 'https://github.com/o/b/pull/5', addedAt: 1 },
+      { id: 's', repoName: 'c', number: 6, addedAt: 1 }
+    ]
+    const result = await resolveLineageMembers(makeStore({ repos: [], links }), PARENT, {
+      listWorktreesFn
+    })
+    expect(result.members.map((m) => m.pr?.provider)).toEqual(['gitlab', 'github', undefined])
+  })
+
   it('reports patternError and falls back to the default pattern', async () => {
     const result = await resolveLineageMembers(
       makeStore({ repos, settings: { keyRegex: '([' } }),

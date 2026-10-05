@@ -6,14 +6,16 @@ describe('parsePullRequestReference', () => {
     expect(parsePullRequestReference('https://github.com/neon/loan-core/pull/12')).toEqual({
       repoName: 'loan-core',
       number: 12,
-      url: 'https://github.com/neon/loan-core/pull/12'
+      url: 'https://github.com/neon/loan-core/pull/12',
+      provider: 'github'
     })
   })
   it('parses a GitLab merge request URL', () => {
     expect(parsePullRequestReference('https://gitlab.com/g/sub/proj/-/merge_requests/4')).toEqual({
       repoName: 'proj',
       number: 4,
-      url: 'https://gitlab.com/g/sub/proj/-/merge_requests/4'
+      url: 'https://gitlab.com/g/sub/proj/-/merge_requests/4',
+      provider: 'gitlab'
     })
   })
   it('parses repo#number', () => {

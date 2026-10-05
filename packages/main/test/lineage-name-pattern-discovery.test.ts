@@ -1,26 +1,27 @@
 import { describe, it, expect } from 'vitest'
 import type { GitWorktreeInfo } from '../../../src/shared/worktree/types'
-import { extractTicketKeys, matchesTicketKeys } from '../../../src/shared/lineage-ticket-keys'
+import { matchesTicketKeys } from '../../../src/shared/lineage-ticket-keys'
+import { DEFAULT_KEY_REGEX } from '../../../src/shared/lineage-discovery-types'
+import { extractKeysWithPattern } from '../../../src/main/lineage/lineage-key-extraction'
 import { discoverPatternTargets } from '../../../src/main/lineage/lineage-name-pattern-discovery'
 
 function wt(path: string, branch: string, isMainWorktree = false): GitWorktreeInfo {
   return { path, head: 'abc', branch, isBare: false, isMainWorktree }
 }
 
-describe('extractTicketKeys', () => {
+// why: the renderer-side default-pattern extractor was removed; main's bounded extractor is the only one
+describe('default key extraction', () => {
+  const keysOf = (text: string): string[] => extractKeysWithPattern(text, DEFAULT_KEY_REGEX).keys
+
   it('pulls ticket keys out of branch-like and workspace-like names', () => {
-    expect(extractTicketKeys('levgp-483-new-loan-desacoplar')).toEqual(['LEVGP-483'])
-    expect(extractTicketKeys('feat/LEVGP-483-nova-oferta')).toEqual(['LEVGP-483'])
-    expect(
-      extractTicketKeys(
-        'worktree:d8ff11c0-2410-43d1-9478-ee3ee5917173::/Users/u004767/orca/workspaces/gnios-context/levgp-483-new-loan'
-      )
-    ).toEqual(['LEVGP-483'])
+    expect(keysOf('levgp-483-new-loan-desacoplar')).toEqual(['LEVGP-483'])
+    expect(keysOf('feat/LEVGP-483-nova-oferta')).toEqual(['LEVGP-483'])
+    expect(keysOf('feat/levgp-483-x levgp-483-new-loan')).toEqual(['LEVGP-483'])
   })
 
   it('returns unique keys and ignores text without a key', () => {
-    expect(extractTicketKeys('LEVGP-483 e levgp-483 e ABC-12')).toEqual(['LEVGP-483', 'ABC-12'])
-    expect(extractTicketKeys('main')).toEqual([])
+    expect(keysOf('LEVGP-483 e levgp-483 e ABC-12')).toEqual(['LEVGP-483', 'ABC-12'])
+    expect(keysOf('main')).toEqual([])
   })
 })
 

@@ -29,7 +29,13 @@ export type ManualPullRequestLink = {
   addedAt: number
 }
 
-export type LineageMemberPullRequest = { number: number; url?: string; title?: string }
+export type LineageMemberPullRequest = {
+  number: number
+  url?: string
+  title?: string
+  /** Absent from older hosts and for `repo#n` references; rendered as `#n`. */
+  provider?: 'github' | 'gitlab'
+}
 
 export type LineageMember = {
   repoName: string

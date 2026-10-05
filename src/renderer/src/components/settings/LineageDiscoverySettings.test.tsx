@@ -110,6 +110,7 @@ describe('LineageDiscoverySettings', () => {
     await waitFor(() =>
       expect(screen.getByTestId('lineage-key-regex-error')).toHaveTextContent('Invalid key pattern')
     )
+    fireEvent.blur(screen.getByLabelText('Key pattern'))
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
@@ -125,20 +126,45 @@ describe('LineageDiscoverySettings', () => {
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
-  it('saves a valid regex', async () => {
+  // why: saving on every keystroke persisted half-typed patterns; the field now commits on blur/Enter
+  it('does not save while typing, and saves a valid regex on blur', async () => {
     testPattern.mockResolvedValue({ keys: [] })
     renderSection()
-    fireEvent.change(screen.getByLabelText('Key pattern'), {
-      target: { value: 'ZZ-\\d+' }
-    })
+    const input = screen.getByLabelText('Key pattern')
+    fireEvent.change(input, { target: { value: 'ZZ-\\d+' } })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400)
     })
+    expect(updateSettings).not.toHaveBeenCalled()
+    fireEvent.blur(input)
     await waitFor(() =>
       expect(updateSettings).toHaveBeenCalledWith({
         lineageDiscovery: { ...DEFAULT_LINEAGE_DISCOVERY, keyRegex: 'ZZ-\\d+' }
       })
     )
+  })
+
+  it('saves a valid regex on Enter', async () => {
+    testPattern.mockResolvedValue({ keys: [] })
+    renderSection()
+    const input = screen.getByLabelText('Key pattern')
+    fireEvent.change(input, { target: { value: 'QQ-\\d+' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() =>
+      expect(updateSettings).toHaveBeenCalledWith({
+        lineageDiscovery: { ...DEFAULT_LINEAGE_DISCOVERY, keyRegex: 'QQ-\\d+' }
+      })
+    )
+  })
+
+  it('does not save an invalid regex on blur', async () => {
+    testPattern.mockResolvedValue({ keys: [], error: 'Invalid key pattern, using the default: (' })
+    renderSection()
+    const input = screen.getByLabelText('Key pattern')
+    fireEvent.change(input, { target: { value: '(' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(screen.getByTestId('lineage-key-regex-error')).toBeInTheDocument())
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('offers a repo checklist when selected repositories is chosen', () => {

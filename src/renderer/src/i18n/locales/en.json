@@ -12265,6 +12265,7 @@
           "allRepositories": "All repositories",
           "selectedRepositories": "Selected repositories",
           "keyPatternRequired": "Key pattern is required",
+          "keyPatternInvalid": "Invalid key pattern",
           "keyPattern": "Key pattern",
           "keyPatternDescription": "Regular expression that extracts ticket keys from the control tower workspace name.",
           "testPattern": "Test pattern",

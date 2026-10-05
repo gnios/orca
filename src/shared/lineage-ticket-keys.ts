@@ -1,17 +1,3 @@
-const TICKET_KEY = /[A-Za-z][A-Za-z0-9]{1,9}-\d+/g
-
-export function extractTicketKeys(text: string): string[] {
-  let target = text
-  if (target.includes('::')) {
-    target = target.split('::').slice(1).join('::')
-  }
-  const keys = new Set<string>()
-  for (const match of target.matchAll(TICKET_KEY)) {
-    keys.add(match[0].toUpperCase())
-  }
-  return [...keys]
-}
-
 export function matchesTicketKeys(name: string, keys: string[]): boolean {
   const haystack = name.toLowerCase()
   return keys.some((key) => {

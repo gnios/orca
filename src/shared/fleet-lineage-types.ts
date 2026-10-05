@@ -95,25 +95,6 @@ export type LineageGetFileDiffResult = {
   error?: string
 }
 
-export type LineagePullRequestReviewer = {
-  name: string
-  avatarUrl?: string
-  status?: 'approved' | 'changes_requested' | 'commented' | 'pending'
-}
-
-export type LineagePullRequest = {
-  id?: string | number
-  number: number
-  title: string
-  branch: string
-  sourceBranch?: string
-  repoName: string
-  author?: string
-  ciStatus?: 'success' | 'failure' | 'pending' | 'running' | 'passed' | 'neutral'
-  reviewers?: (string | LineagePullRequestReviewer)[]
-  url?: string
-}
-
 export type LineageGetMembersArgs = { parentWorkspaceKey: string; force?: boolean }
 
 export type LineageGetMembersResult = {

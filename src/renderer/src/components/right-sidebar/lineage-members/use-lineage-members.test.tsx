@@ -1,6 +1,6 @@
 // why: the hook renders through React DOM, so @vitest-environment happy-dom
 
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   LineageGetMembersArgs,
@@ -112,5 +112,18 @@ describe('useLineageMembers', () => {
     useAppStore.setState({ workspaceLineageByChildKey: {} })
 
     await waitFor(() => expect(getMembers).toHaveBeenCalledTimes(2))
+  })
+
+  it('bypasses the host scan cache only on an explicit refresh', async () => {
+    getMembers.mockResolvedValue({ parentWorkspaceKey: 'folder:t', keys: [], members: [] })
+    const { result } = renderHook(() => useLineageMembers('folder:t'))
+    await waitFor(() => expect(getMembers).toHaveBeenCalledTimes(1))
+    expect(getMembers).toHaveBeenLastCalledWith({ parentWorkspaceKey: 'folder:t' })
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(getMembers).toHaveBeenLastCalledWith({ parentWorkspaceKey: 'folder:t', force: true })
   })
 })
