@@ -92,7 +92,19 @@ describe('background history, conflict and combined diff opens', () => {
           .getState()
           .openCommitAllDiffs(BACKGROUND, '/repo-2', commitSummary, [branchEntry], 'subject')
     ],
-    ['openAllDiffs', () => store.getState().openAllDiffs(BACKGROUND, '/repo-2')]
+    ['openAllDiffs', () => store.getState().openAllDiffs(BACKGROUND, '/repo-2')],
+    [
+      'openConflictReview',
+      () =>
+        store
+          .getState()
+          .openConflictReview(
+            BACKGROUND,
+            '/repo-2',
+            [{ path: conflictEntry.path, conflictKind: 'both_modified' }],
+            'live-summary'
+          )
+    ]
   ]
 
   it.each(opens)('%s leaves the on-screen editor alone', (_name, open) => {
