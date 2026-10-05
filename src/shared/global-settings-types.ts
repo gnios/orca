@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
+import type { LineageDiscoverySettings } from './lineage-discovery-types'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
@@ -59,6 +60,7 @@ export type WorktreeVisibilityDefaults = {
 
 export type GlobalSettings = {
   workspaceDir: string
+  lineageDiscovery?: LineageDiscoverySettings
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
