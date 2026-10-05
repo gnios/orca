@@ -12818,6 +12818,8 @@
             "entryDiscardFailed": "Failed to discard “{{value0}}”",
             "entryDeleteFailed": "Failed to delete “{{value0}}”",
             "entryFailedInWorkspace": "{{value0}} in {{value1}}",
+            "openedInWorkspace": "Opened in {{value0}}",
+            "switchToWorkspace": "Switch",
             "diffCommentNotesCopyFailed": "Failed to copy notes"
           },
           "SourceControlAgentActionDialog": {

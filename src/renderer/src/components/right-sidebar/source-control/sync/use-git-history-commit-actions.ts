@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { notifySourceControlBackgroundOpen } from '../listing/background-open-toast'
 import {
   getRuntimeGitCommitCompare,
   getRuntimeGitRemoteCommitUrl,
@@ -119,6 +120,7 @@ export function useGitHistoryCommitActions({
           item.subject,
           item.message
         )
+        notifySourceControlBackgroundOpen(activeWorktreeId)
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -164,6 +166,7 @@ export function useGitHistoryCommitActions({
         detectLanguage(entry.path),
         { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
       )
+      notifySourceControlBackgroundOpen(activeWorktreeId)
     },
     [activeWorktreeId, openCommitDiff, resolveSplitTargetGroupId, worktreePath]
   )
