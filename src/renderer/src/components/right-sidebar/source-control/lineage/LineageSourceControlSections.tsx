@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { useAppStore } from '@/store'
 import type { LineageMember } from '../../../../../../shared/lineage-discovery-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -41,6 +42,12 @@ function LineageSourceControlSection({
   onOpenChange: (open: boolean) => void
   PanelComponent: React.ComponentType
 }): React.JSX.Element {
+  const identity = getWorktreeGitIdentityDisplay(worktree)
+  // why: the section holds this worktree's panel, so its checked-out branch wins over discovery's report
+  const branchLabel =
+    identity?.kind === 'branch'
+      ? identity.branchName
+      : (identity?.sourceControlLabel ?? member.branch)
   const tabVisible = useAppStore(
     (s) => s.rightSidebarOpen && s.rightSidebarTab === 'source-control'
   )
@@ -70,12 +77,12 @@ function LineageSourceControlSection({
               <span className="truncate text-xs font-semibold" title={member.repoName}>
                 {member.repoName}
               </span>
-              {member.branch ? (
+              {branchLabel ? (
                 <span
                   className="truncate text-[11px] font-normal text-muted-foreground"
-                  title={member.branch}
+                  title={branchLabel}
                 >
-                  {member.branch}
+                  {branchLabel}
                 </span>
               ) : null}
               <LineageOriginBadge matchedBy={member.matchedBy} reasons={member.reasons} />

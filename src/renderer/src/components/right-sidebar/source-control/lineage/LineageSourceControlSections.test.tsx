@@ -17,7 +17,12 @@ import { LineageSourceControlSections } from './LineageSourceControlSections'
 
 const initialAppState = useAppStore.getInitialState()
 const towerWorktree = makeWorktree({ id: 'repo-ui::/w/ui', repoId: 'repo-ui', path: '/w/ui' })
-const apiWorktree = makeWorktree({ id: 'repo-api::/w/api', repoId: 'repo-api', path: '/w/api' })
+const apiWorktree = makeWorktree({
+  id: 'repo-api::/w/api',
+  repoId: 'repo-api',
+  path: '/w/api',
+  branch: 'refs/heads/feat/ABC-1'
+})
 const apiSecondWorktree = makeWorktree({
   id: 'repo-api::/w/api-2',
   repoId: 'repo-api',
@@ -124,6 +129,13 @@ describe('LineageSourceControlSections', () => {
     useAppStore.setState({ rightSidebarTab: 'checks' })
     render(<LineageSourceControlSections members={members} PanelComponent={StubPanel} />)
     expect(panelMounts.at(-1)).toEqual({ worktreeId: towerWorktree.id, isActive: false })
+  })
+
+  it("names the worktree's checked-out branch over the branch the member reported", () => {
+    render(<LineageSourceControlSections members={members} PanelComponent={StubPanel} />)
+    const tower = screen.getByTestId(`lineage-source-control-section-${towerWorktree.id}`)
+    expect(within(tower).getByText('feature')).toBeTruthy()
+    expect(within(tower).queryByText('feat/ABC-1')).toBeNull()
   })
 
   it('labels an SSH member this host cannot inspect as unverifiable', () => {
