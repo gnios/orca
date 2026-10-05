@@ -64,6 +64,10 @@ function entryFailureTitle(
  * this exists to remove — but it names that worktree and offers no action, because every recovery
  * affordance here is bound to the repo the attempt ran against.
  */
+function isStoreActiveWorktree(worktreeId: string | null): boolean {
+  return useAppStore.getState().activeWorktreeId === worktreeId
+}
+
 export function showSourceControlEntryFailureToast({
   operation,
   filePath,
@@ -71,7 +75,8 @@ export function showSourceControlEntryFailureToast({
   error,
   worktreeId,
   worktreeName,
-  onRetry
+  onRetry,
+  isPanelWorktree = isStoreActiveWorktree
 }: {
   operation: SourceControlEntryOperation
   filePath: string
@@ -83,13 +88,15 @@ export function showSourceControlEntryFailureToast({
   /** Shown only when the toast no longer belongs to the active worktree. */
   worktreeName: string | null
   onRetry?: () => void
+  /** Whether the panel still shows this worktree; a lineage section pins one that is not active. */
+  isPanelWorktree?: (worktreeId: string | null) => boolean
 }): void {
-  const isActiveWorktree = useAppStore.getState().activeWorktreeId === worktreeId
+  const isShownWorktree = isPanelWorktree(worktreeId)
   const title = entryFailureTitle(operation, filePath, deletesFile)
-  const offerRetry = Boolean(onRetry) && isActiveWorktree
+  const offerRetry = Boolean(onRetry) && isShownWorktree
   entryFailureSlotOwner = { worktreeId }
   toast.error(
-    isActiveWorktree || !worktreeName
+    isShownWorktree || !worktreeName
       ? title
       : translate(
           'auto.components.right.sidebar.SourceControl.entryFailedInWorkspace',
@@ -110,7 +117,7 @@ export function showSourceControlEntryFailureToast({
                 // retry that re-fails inside that window would take the re-raised toast with it. The
                 // caller owns this slot instead: it dismisses on success and re-raises on failure.
                 event.preventDefault()
-                if (useAppStore.getState().activeWorktreeId !== worktreeId) {
+                if (!isPanelWorktree(worktreeId)) {
                   dismissSourceControlEntryFailureToast(worktreeId)
                   return
                 }

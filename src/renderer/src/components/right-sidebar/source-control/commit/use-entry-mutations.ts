@@ -17,6 +17,7 @@ import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
+import { useIsSourceControlPanelWorktree } from '../panel/source-control-target-worktree'
 
 export function useSourceControlEntryMutations({
   activeRepoSettings,
@@ -29,6 +30,7 @@ export function useSourceControlEntryMutations({
   worktreePath: string | null
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const isPanelWorktree = useIsSourceControlPanelWorktree()
   // Why: named function expression so the failure toast's Retry can re-enter the same attempt.
   const runEntryMutation = useCallback(
     async function runEntryMutation(
@@ -59,6 +61,7 @@ export function useSourceControlEntryMutations({
           error,
           worktreeId: activeWorktreeId,
           worktreeName: worktreePath ? basename(worktreePath) : null,
+          isPanelWorktree,
           onRetry: () => {
             void runEntryMutation(operation, filePath, mutate)
           }
@@ -71,7 +74,13 @@ export function useSourceControlEntryMutations({
       // Why: refreshing outside the try keeps a refresh failure from being reported as "Failed to stage"; the refresher reports its own.
       await refreshActiveGitStatusAfterMutation()
     },
-    [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [
+      activeRepoSettings,
+      worktreePath,
+      activeWorktreeId,
+      isPanelWorktree,
+      refreshActiveGitStatusAfterMutation
+    ]
   )
 
   const handleStage = useCallback(
