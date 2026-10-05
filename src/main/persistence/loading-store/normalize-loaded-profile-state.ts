@@ -3,6 +3,8 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import type { ManualPullRequestLink } from '../../../shared/lineage-discovery-types'
+import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -68,6 +70,7 @@ export function normalizeLoadedProfileState(
     workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
       parsed.workspaceLineageByChildKey
     ),
+    lineageManualLinksByParentKey: normalizeManualLinks(parsed.lineageManualLinksByParentKey),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
     // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
@@ -108,4 +111,35 @@ export function normalizeLoadedProfileState(
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     onboarding: normalizedOnboarding
   }
+}
+
+function isManualLink(value: unknown): value is ManualPullRequestLink {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const link: Partial<Record<keyof ManualPullRequestLink, unknown>> = value
+  return (
+    typeof link.id === 'string' &&
+    typeof link.repoName === 'string' &&
+    typeof link.number === 'number' &&
+    Number.isInteger(link.number) &&
+    link.number > 0
+  )
+}
+
+function normalizeManualLinks(value: unknown): Record<WorkspaceKey, ManualPullRequestLink[]> {
+  const normalized: Record<WorkspaceKey, ManualPullRequestLink[]> = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return normalized
+  }
+  for (const [key, links] of Object.entries(value)) {
+    if (!Array.isArray(links)) {
+      continue
+    }
+    const valid = links.filter(isManualLink)
+    if (valid.length > 0) {
+      normalized[key as WorkspaceKey] = valid
+    }
+  }
+  return normalized
 }
