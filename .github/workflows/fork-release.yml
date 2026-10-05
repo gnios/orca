@@ -1,0 +1,101 @@
+name: Fork Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag version to release (e.g. v1.4.219)'
+        required: true
+        type: string
+        default: 'v1.4.219'
+      draft:
+        description: 'Publish as draft'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Publish as prerelease'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Desktop Application
+        run: pnpm run build:desktop
+
+      - name: Build macOS Helper Binaries
+        run: |
+          pnpm run build:computer-macos
+          pnpm run build:keyboard-layout-macos
+          pnpm run build:notification-status-macos
+
+      - name: Package macOS App (DMG & ZIP)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          ORCA_PUBLISH_OWNER: ${{ github.repository_owner }}
+          ORCA_PUBLISH_REPO: ${{ github.event.repository.name }}
+        run: |
+          pnpm run ensure:electron-runtime
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish never
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Orca ${{ steps.release_tag.outputs.tag }}
+          draft: ${{ inputs.draft || false }}
+          prerelease: ${{ inputs.prerelease || false }}
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest-mac.yml
+          generate_release_notes: true
