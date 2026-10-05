@@ -8,7 +8,7 @@
 // ad-hoc deep sign) derives the correct code identifier automatically —
 // macOS keys notification records to that identifier.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -42,33 +42,46 @@ try {
   const triples = singleArch
     ? [process.arch === 'arm64' ? 'arm64-apple-macosx' : 'x86_64-apple-macosx']
     : ['arm64-apple-macosx', 'x86_64-apple-macosx']
-  const builtBinaries = triples.map((triple) => {
+  const builtBinaries = []
+  for (const triple of triples) {
     const output = path.join(workDir, `orca-notification-status-${triple}`)
-    execFileSync(
-      'swiftc',
-      [
-        '-O',
-        sourcePath,
-        '-target',
-        triple.replace('-apple-macosx', '-apple-macosx11.0'),
-        '-o',
-        output,
-        '-Xlinker',
-        '-sectcreate',
-        '-Xlinker',
-        '__TEXT',
-        '-Xlinker',
-        '__info_plist',
-        '-Xlinker',
-        plistPath
-      ],
-      { stdio: 'inherit' }
-    )
-    return output
-  })
+    try {
+      execFileSync(
+        'swiftc',
+        [
+          '-module-cache-path',
+          path.join(workDir, 'module-cache'),
+          '-O',
+          sourcePath,
+          '-target',
+          triple.replace('-apple-macosx', '-apple-macosx11.0'),
+          '-o',
+          output,
+          '-Xlinker',
+          '-sectcreate',
+          '-Xlinker',
+          '__TEXT',
+          '-Xlinker',
+          '__info_plist',
+          '-Xlinker',
+          plistPath
+        ],
+        { stdio: 'inherit' }
+      )
+      builtBinaries.push(output)
+    } catch (err) {
+      // why: host CLT may lack non-host swift libraries; keep host arch for local builds
+      if (triples.length > 1 && !triple.startsWith(process.arch)) {
+        console.warn(`[build-notification-status] skipping non-host arch ${triple}: ${err.message}`)
+        continue
+      }
+      throw err
+    }
+  }
   mkdirSync(path.dirname(outputPath), { recursive: true })
+  rmSync(outputPath, { force: true })
   if (builtBinaries.length === 1) {
-    execFileSync('cp', [builtBinaries[0], outputPath])
+    copyFileSync(builtBinaries[0], outputPath)
   } else {
     execFileSync('lipo', ['-create', ...builtBinaries, '-output', outputPath])
   }

@@ -58,6 +58,10 @@ const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMa
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion =
   isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+// why: local builds without release deps can scope packaging to host architecture
+const macTargetArch = process.env.ORCA_MAC_TARGET_ARCH
+  ? process.env.ORCA_MAC_TARGET_ARCH.split(',').map((s) => s.trim())
+  : ['x64', 'arm64']
 const isHourlyChannel = isMacHourly || isWinHourly
 const isDailyChannel = isMacDaily || isWinDaily
 const isAdhocChannel = isMacAdhoc || isWinAdhoc
@@ -602,11 +606,11 @@ module.exports = {
     target: [
       {
         target: 'dmg',
-        arch: ['x64', 'arm64']
+        arch: macTargetArch
       },
       {
         target: 'zip',
-        arch: ['x64', 'arm64']
+        arch: macTargetArch
       }
     ]
   },

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -25,28 +25,41 @@ const singleArch = args.includes('--single-arch')
 const workDir = mkdtempSync(path.join(tmpdir(), 'orca-keyboard-layout-'))
 
 try {
-  const triples = singleArch
+  const candidateTriples = singleArch
     ? [process.arch === 'arm64' ? 'arm64-apple-macosx' : 'x86_64-apple-macosx']
     : ['arm64-apple-macosx', 'x86_64-apple-macosx']
-  const builtBinaries = triples.map((triple) => {
+  const builtBinaries = []
+  for (const triple of candidateTriples) {
     const output = path.join(workDir, `orca-keyboard-layout-${triple}`)
-    execFileSync(
-      'swiftc',
-      [
-        '-O',
-        sourcePath,
-        '-target',
-        triple.replace('-apple-macosx', '-apple-macosx11.0'),
-        '-o',
-        output
-      ],
-      { stdio: 'inherit' }
-    )
-    return output
-  })
+    try {
+      execFileSync(
+        'swiftc',
+        [
+          '-module-cache-path',
+          path.join(workDir, 'module-cache'),
+          '-O',
+          sourcePath,
+          '-target',
+          triple.replace('-apple-macosx', '-apple-macosx11.0'),
+          '-o',
+          output
+        ],
+        { stdio: 'inherit' }
+      )
+      builtBinaries.push(output)
+    } catch (err) {
+      // why: host CLT may lack non-host swift libraries; keep host arch for local builds
+      if (candidateTriples.length > 1 && !triple.startsWith(process.arch)) {
+        console.warn(`[build-keyboard-layout] skipping non-host arch ${triple}: ${err.message}`)
+        continue
+      }
+      throw err
+    }
+  }
   mkdirSync(path.dirname(outputPath), { recursive: true })
+  rmSync(outputPath, { force: true })
   if (builtBinaries.length === 1) {
-    execFileSync('cp', [builtBinaries[0], outputPath])
+    copyFileSync(builtBinaries[0], outputPath)
   } else {
     execFileSync('lipo', ['-create', ...builtBinaries, '-output', outputPath])
   }
