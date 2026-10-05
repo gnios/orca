@@ -6,9 +6,18 @@ import type {
   NotifyWorktreeCreatedResult,
   LineageCommitProjectArgs,
   LineageCommitProjectResult,
+  LineageGitStatusArgs,
   LineageGitStatusPayload,
   LineageGetFileDiffArgs,
-  LineageGetFileDiffResult
+  LineageGetFileDiffResult,
+  LineageGetMembersArgs,
+  LineageGetMembersResult,
+  LineageAddManualLinkArgs,
+  LineageAddManualLinkResult,
+  LineageRemoveManualLinkArgs,
+  LineageRemoveManualLinkResult,
+  LineageTestPatternArgs,
+  LineageTestPatternResult
 } from '../../shared/fleet-lineage-types'
 import {
   attachWorkspaceToParent,
@@ -20,6 +29,10 @@ import {
   commitLineageProject,
   getLineageFileDiff
 } from '../lineage/lineage-git-status-service'
+
+import { resolveLineageMembers } from '../lineage/lineage-member-resolver'
+import { addLineageManualLink, removeLineageManualLink } from '../lineage/lineage-manual-links'
+import { extractKeysWithPattern } from '../../shared/lineage-ticket-keys'
 
 export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.removeHandler('workspace:attach-to-parent')
@@ -41,8 +54,8 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
   ipcMain.removeHandler('git:lineage-get-status')
   ipcMain.handle(
     'git:lineage-get-status',
-    async (_event, args: { parentWorkspaceKey: string }): Promise<LineageGitStatusPayload> => {
-      return getLineageStatus(store, args.parentWorkspaceKey)
+    async (_event, args: LineageGitStatusArgs): Promise<LineageGitStatusPayload> => {
+      return getLineageStatus(store, args.parentWorkspaceKey, { ticketKeys: args.ticketKeys })
     }
   )
 
@@ -59,14 +72,38 @@ export function registerLineageIpcHandlers(store: LineageStoreContract): void {
     'git:lineage-get-file-diff',
     async (_event, args: LineageGetFileDiffArgs): Promise<LineageGetFileDiffResult> => {
       return getLineageFileDiff(args, {
-        resolveWorktreePath: (id: string) => {
-          const anyStore = store as any
-          if (typeof anyStore.getWorktree === 'function') {
-            return anyStore.getWorktree(id)?.path
-          }
-          return undefined
-        }
+        resolveWorktreePath: (id: string) => store.getWorktree?.(id)?.path
       })
     }
+  )
+
+  ipcMain.removeHandler('lineage:get-members')
+  ipcMain.handle(
+    'lineage:get-members',
+    async (_event, args: LineageGetMembersArgs): Promise<LineageGetMembersResult> => {
+      const resolved = await resolveLineageMembers(store, args.parentWorkspaceKey)
+      return { status: 200, parentWorkspaceKey: args.parentWorkspaceKey, ...resolved }
+    }
+  )
+
+  ipcMain.removeHandler('lineage:add-manual-link')
+  ipcMain.handle(
+    'lineage:add-manual-link',
+    async (_event, args: LineageAddManualLinkArgs): Promise<LineageAddManualLinkResult> =>
+      addLineageManualLink(store, args)
+  )
+
+  ipcMain.removeHandler('lineage:remove-manual-link')
+  ipcMain.handle(
+    'lineage:remove-manual-link',
+    async (_event, args: LineageRemoveManualLinkArgs): Promise<LineageRemoveManualLinkResult> =>
+      removeLineageManualLink(store, args)
+  )
+
+  ipcMain.removeHandler('lineage:test-pattern')
+  ipcMain.handle(
+    'lineage:test-pattern',
+    async (_event, args: LineageTestPatternArgs): Promise<LineageTestPatternResult> =>
+      extractKeysWithPattern(args.towerName, args.keyRegex)
   )
 }

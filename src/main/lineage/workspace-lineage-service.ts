@@ -8,12 +8,19 @@ import type {
   NotifyWorktreeCreatedResult
 } from '../../shared/fleet-lineage-types'
 import { getActiveLineageContext } from './pty-env-injector'
+import type { PatternRepo } from './lineage-name-pattern-discovery'
+import type { ManualPullRequestLink } from '../../shared/lineage-discovery-types'
 
-export interface LineageStoreContract {
+export type LineageStoreContract = {
   getAllWorkspaceLineage?(): Record<string, WorkspaceLineage>
   getWorkspaceLineage?(childWorkspaceKey: string): WorkspaceLineage | undefined
   setWorkspaceLineage?(lineage: WorkspaceLineage): WorkspaceLineage
   getState?(): { workspaceLineageByChildKey?: Record<string, WorkspaceLineage> }
+  getRepos?(): PatternRepo[]
+  getWorktree?(id: string): { path?: string; repoId?: string; branch?: string } | undefined
+  getSettings?(): { lineageDiscovery?: unknown }
+  getLineageManualLinks?(parentKey: string): ManualPullRequestLink[]
+  setLineageManualLinks?(parentKey: string, links: ManualPullRequestLink[]): void
 }
 
 function getStoredLineages(store: LineageStoreContract): Record<string, WorkspaceLineage> {

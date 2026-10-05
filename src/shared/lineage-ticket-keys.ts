@@ -50,7 +50,10 @@ export function extractKeysWithPattern(
   const target = text.includes('::') ? text.split('::').slice(1).join('::') : text
   const keys = new Set<string>()
   for (const match of target.matchAll(pattern)) {
-    keys.add(match[0].toUpperCase())
+    // invariant: a regex may match "", and an empty key would match every branch
+    if (match[0]) {
+      keys.add(match[0].toUpperCase())
+    }
   }
   return error ? { keys: [...keys], error } : { keys: [...keys] }
 }

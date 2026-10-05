@@ -17,4 +17,7 @@ describe('extractKeysWithPattern', () => {
   it('returns no keys when nothing matches', () => {
     expect(extractKeysWithPattern('plain name', 'ZZZ-\\d+')).toEqual({ keys: [] })
   })
+  it('drops empty-string matches', () => {
+    expect(extractKeysWithPattern('xyz', 'a*')).toEqual({ keys: [] })
+  })
 })

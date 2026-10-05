@@ -1,19 +1,35 @@
 import type { GitFileStatus, GitStatusEntry } from './git-status-types'
 import type { WorkspaceLineage } from './worktree/lineage-types'
+import type {
+  LineageMatchSource,
+  LineageMember,
+  ManualPullRequestLink
+} from './lineage-discovery-types'
 
-export interface LineageWorktreeStatus {
+export type LineageWorktreeStatus = {
   worktreeId: string
   worktreePath: string
   branch: string
   dirtyFiles: GitStatusEntry[] | GitFileStatus[]
+  /** Absent on payloads from older hosts; treat as 'lineage'. */
+  matchedBy?: LineageMatchSource
+  /** Why the worktree was included; absent on payloads from older hosts. */
+  reason?: string[]
 }
 
-export interface LineageProjectStatus {
+export type LineageProjectStatus = {
   repoName: string
   worktrees: LineageWorktreeStatus[]
+  totalDirtyFiles?: number
 }
 
-export interface LineageGitStatusPayload {
+export type LineageGitStatusArgs = {
+  parentWorkspaceKey: string
+  /** Ticket keys (e.g. LEVGP-483) from the workspace name; absent = derive from the key. */
+  ticketKeys?: string[]
+}
+
+export type LineageGitStatusPayload = {
   status?: number
   parentKey: string
   parentWorkspaceKey: string
@@ -21,52 +37,52 @@ export interface LineageGitStatusPayload {
   projects: Record<string, LineageProjectStatus>
 }
 
-export interface AttachToParentArgs {
+export type AttachToParentArgs = {
   parentWorkspaceKey: string
   childWorkspaceKey: string
 }
 
-export interface AttachToParentResult {
+export type AttachToParentResult = {
   status?: number
   success: boolean
   lineageEntry?: WorkspaceLineage
   error?: string
 }
 
-export interface NotifyWorktreeCreatedArgs {
+export type NotifyWorktreeCreatedArgs = {
   worktreePath: string
   repoName?: string
   branch?: string
   parentWorkspaceKey?: string
 }
 
-export interface NotifyWorktreeCreatedResult {
+export type NotifyWorktreeCreatedResult = {
   status?: number
   registered: boolean
   lineageEntry?: WorkspaceLineage
   error?: string
 }
 
-export interface LineageCommitProjectArgs {
+export type LineageCommitProjectArgs = {
   worktreePath: string
   message: string
 }
 
-export interface LineageCommitProjectResult {
+export type LineageCommitProjectResult = {
   status?: number
   success: boolean
   commitHash?: string
   error?: string
 }
 
-export interface LineageGetFileDiffArgs {
+export type LineageGetFileDiffArgs = {
   childWorktreeId?: string
   worktreePath?: string
   filePath: string
   staged: boolean
 }
 
-export interface LineageGetFileDiffResult {
+export type LineageGetFileDiffResult = {
   status: 200 | 404 | 500
   patch: string
   original: string
@@ -74,14 +90,14 @@ export interface LineageGetFileDiffResult {
   error?: string
 }
 
-export interface LineagePullRequestReviewer {
+export type LineagePullRequestReviewer = {
   name: string
   avatarUrl?: string
   status?: 'approved' | 'changes_requested' | 'commented' | 'pending'
 }
 
-export interface LineagePullRequest {
-  id: string | number
+export type LineagePullRequest = {
+  id?: string | number
   number: number
   title: string
   branch: string
@@ -93,3 +109,33 @@ export interface LineagePullRequest {
   url?: string
 }
 
+export type LineageGetMembersArgs = { parentWorkspaceKey: string }
+
+export type LineageGetMembersResult = {
+  status?: number
+  parentWorkspaceKey: string
+  keys: string[]
+  members: LineageMember[]
+  patternError?: string
+}
+
+export type LineageAddManualLinkArgs = { parentWorkspaceKey: string; reference: string }
+
+export type LineageAddManualLinkResult = {
+  success: boolean
+  error?: string
+  link?: ManualPullRequestLink
+}
+
+export type LineageRemoveManualLinkArgs = { parentWorkspaceKey: string; linkId: string }
+
+export type LineageRemoveManualLinkResult = {
+  success: boolean
+}
+
+export type LineageTestPatternArgs = { towerName: string; keyRegex: string }
+
+export type LineageTestPatternResult = {
+  keys: string[]
+  error?: string
+}
