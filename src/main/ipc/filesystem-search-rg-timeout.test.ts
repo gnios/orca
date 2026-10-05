@@ -25,7 +25,8 @@ const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: handleMock
+    handle: handleMock,
+    removeHandler: vi.fn()
   },
   shell: {
     trashItem: vi.fn()
